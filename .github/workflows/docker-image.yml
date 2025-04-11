@@ -2,16 +2,15 @@ name: Build and Push Docker Image to GHCR
 
 on:
   push:
-    branches: [ "main" ] # Trigger on pushes to the main branch
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
-    # Grant permissions for the GITHUB_TOKEN to write packages
     permissions:
       contents: read
-      packages: write # Required to push to GHCR
+      packages: write
 
     steps:
       - name: Checkout Repository
@@ -20,23 +19,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Log in to GitHub Container Registry (GHCR)
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # Use the automatically generated GITHUB_TOKEN for authentication
-          username: ${{ github.actor }} # Your GitHub username
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push Docker image to GHCR
-      # IMPORTANT: Replace YOUR_GITHUB_USERNAME and YOUR_REPOSITORY_NAME below
+      # Build and push Docker image to GHCR for multiple platforms
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
+          # --- Add this line ---
+          platforms: linux/amd64,linux/arm64
+          # --- End of added line ---
           tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
-          # Alternative tagging scheme using your username explicitly if preferred:
-          # tags: ghcr.io/${{ github.actor }}/worktimeweb:latest
+          # Ensure image name uses lowercase as required by Docker/OCI spec if derived from repo name
+          # tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name.toLowerCase() }}:latest # Alternative if repo name has caps
