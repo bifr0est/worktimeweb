@@ -1,0 +1,20 @@
+# Ignore Git directory
+.git
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+# Ignore virtual environment folders (if any)
+venv/
+env/
+.venv/
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+# Ignore IDE folders (optional)
+.vscode/
+.idea/
+# Dockerfile itself doesn't need to be inside
+Dockerfile
+# Ignore .env file if you use one for local dev secrets
+.env

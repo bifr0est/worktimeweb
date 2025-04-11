@@ -6,3 +6,5 @@ python-dotenv>=0.15
 
 # Optional: For robust timezone handling
 pytz
+
+gunicorn

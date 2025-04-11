@@ -1,18 +1,27 @@
 # Use an official Python runtime as a parent image
 FROM python:3.13-slim
 
-# Set the working directory
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1 
+ENV PYTHONUNBUFFERED 1      
+ENV FLASK_APP=app:app       
+ENV FLASK_DEBUG=0           
+ENV TIMEZONE=Europe/Vienna  
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy requirements.txt and install dependencies
-COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# Install Python dependencies
+# Copy only requirements first to leverage Docker cache
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the code
-COPY . /app
+# Copy the rest of the application code into the container
+COPY . .
 
-# Expose the port the app runs on
+# Expose the port the app runs on (should match Gunicorn command)
 EXPOSE 5000
 
-# Run the application
-CMD ["python", "app.py"]
+# Command to run the application using Gunicorn
+# Increase workers based on your server's CPU cores if needed (e.g., workers = cpu_cores * 2 + 1)
+CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:5000", "app:app"]
