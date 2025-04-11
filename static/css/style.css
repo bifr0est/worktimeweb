@@ -1,0 +1,150 @@
+/* worktimeweb/static/css/style.css */
+
+/* --- CSS Variables for Theming --- */
+:root {
+  --bg-color: #f8f9fa;
+  --text-color: #212529;
+  --card-bg: #ffffff;
+  --card-shadow: rgba(0,0,0,0.08);
+  --border-color: #dee2e6;
+  --input-bg: #ffffff;
+  --input-text: #495057;
+  --button-bg: #0d6efd;
+  --button-hover-bg: #0b5ed7;
+  --button-text: #ffffff;
+  --icon-color: #0d6efd;
+  --link-color: #0d6efd;
+  --gradient-start: #0d6efd;
+  --gradient-end: #0dcaf0;
+  --break-bg: #f8f9fa;
+}
+
+body.dark-mode {
+  --bg-color: #1a1a1a;
+  --text-color: #ffffff; /* Use pure white for max contrast */
+  --card-bg: #2c2c2c;
+  --card-shadow: rgba(255,255,255,0.05);
+  --border-color: #444444;
+  --input-bg: #333333;
+  --input-text: #ffffff; /* Match main text */
+  --button-bg: #1e88e5;
+  --button-hover-bg: #1565c0;
+  --button-text: #ffffff;
+  --icon-color: #1e88e5;
+  --link-color: #64b5f6;
+  --gradient-start: #1e88e5;
+  --gradient-end: #1565c0;
+  --break-bg: #3a3a3a;
+}
+/* --- End Theming Variables --- */
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  padding-top: 3rem;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 300;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  box-shadow: 0 5px 20px var(--card-shadow);
+  margin-bottom: 3rem;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+.card-header {
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+  color: #fff;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.card-header h4 { font-weight: 600; }
+.card-body { padding: 1.5rem; }
+.form-label { font-weight: 400; color: var(--text-color); }
+.form-control {
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--border-color);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.form-control:focus {
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--button-bg);
+    box-shadow: 0 0 0 0.25rem rgba(var(--button-bg), 0.25);
+}
+input[type="time"] { color-scheme: dark; }
+body.dark-mode input[type="time"] { color-scheme: dark; }
+body:not(.dark-mode) input[type="time"] { color-scheme: light; }
+
+.form-check-input { background-color: var(--input-bg); border-color: var(--border-color); }
+.form-check-input:checked { background-color: var(--button-bg); border-color: var(--button-bg); }
+.form-check-label { color: var(--text-color); }
+
+.btn-primary {
+  background-color: var(--button-bg);
+  border: none;
+  color: var(--button-text);
+  transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  font-weight: 400;
+  padding: 0.6rem 1rem;
+  box-shadow: 0 2px 5px rgba(0, 91, 255, 0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--button-hover-bg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 91, 255, 0.4);
+}
+.btn-primary:disabled {
+    background-color: grey;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+/* --- Break Details --- */
+#break-details {
+  background-color: var(--break-bg);
+  transition: opacity 0.4s ease, max-height 0.4s ease, margin-top 0.4s ease, padding 0.4s ease, border 0.4s ease, background-color 0.3s ease;
+  overflow: hidden; max-height: 0; opacity: 0; margin-top: 0; padding: 0 1rem; border: none;
+  border-radius: 8px;
+}
+#long_break:checked ~ #break-details { max-height: 200px; opacity: 1; margin-top: 1rem; padding: 1rem; border: 1px solid var(--border-color); }
+
+/* --- Results Styling --- */
+/* Ensure all text elements in results use the variable */
+.results-area h5, .results-area p, .results-area p strong, .results-area p em {
+    color: var(--text-color); /* Inherits --text-color */
+}
+.results-area p { margin-bottom: 0.75rem; font-size: 1.05rem; }
+.results-area p i { margin-right: 0.6rem; color: var(--icon-color); width: 20px; text-align: center; }
+hr { border-top-color: var(--border-color); }
+
+/* --- Progress Bar --- */
+.progress { background-color: var(--border-color); }
+.progress-bar {
+    background-color: var(--button-bg);
+    transition: width 0.5s ease-in-out;
+    color: var(--button-text);
+    font-weight: 400;
+}
+
+/* --- Loading/Disabled State --- */
+.calculating .spinner-border { display: inline-block !important; }
+
+/* --- Theme Toggle --- */
+.theme-switch-wrapper { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 1rem; margin-top: -1rem; }
+.theme-switch { display: inline-block; height: 24px; position: relative; width: 50px; }
+.theme-switch input { opacity: 0; width: 0; height: 0; }
+.slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; }
+.slider:before { background-color: #fff; bottom: 4px; content: ""; height: 16px; left: 4px; position: absolute; transition: .4s; width: 16px; }
+input:checked + .slider { background-color: var(--button-bg); }
+input:checked + .slider:before { transform: translateX(26px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }
+/* Ensure theme toggle icons use text color */
+.theme-switch-wrapper i { color: var(--text-color); }
