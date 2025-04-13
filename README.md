@@ -2,9 +2,10 @@
 
 [![Docker Build Status](https://img.shields.io/github/actions/workflow/status/bifr0est/worktimeweb/docker-image.yml?branch=main&label=Docker%20Build&logo=githubactions&logoColor=white)](https://github.com/bifr0est/worktimeweb/actions/workflows/docker-image.yml)
 
-A simple yet powerful web application built with Flask to calculate your work end time based on your start time, standard work duration (including Fridays), and any extended breaks taken. Features a dynamic interface with AJAX updates, dark mode, and a progress bar.
+A simple yet powerful web application built with Flask to calculate your work end time based on your start time, standard work duration (including Fridays), and any extended breaks taken. Features a dynamic interface with AJAX updates, dark mode, progress bar, and basic PWA capabilities.
 
 ![Work Time Tracker Screenshot](assets/screenshot.png)
+_(Suggestion: Add a screenshot or GIF of the app in action here!)_
 
 ## ✨ Features
 
@@ -16,13 +17,16 @@ A simple yet powerful web application built with Flask to calculate your work en
 * **Timezone Aware:** Uses `pytz` for accurate timezone handling (configurable via environment variable).
 * **Work Progress Bar:** Visual indicator of how much of the required work time has been completed.
 * **Dark/Light Mode:** User-toggleable theme for comfort.
+* **Installable PWA:** Can be installed to the home screen on supported devices (via Manifest).
+* **Basic Offline Support:** App interface (shell) loads when offline (via Service Worker caching). *(Note: Calculations still require network connection).*
 * **Dockerized:** Ready for deployment via Docker.
-* **CI/CD Ready:** Includes GitHub Actions workflow to automatically build and push Docker image to GHCR on commits to `main`.
+* **CI/CD Ready:** Includes GitHub Actions workflow to automatically build and push multi-arch Docker image to GHCR on commits to `main`.
 
 ## 💻 Technologies Used
 
 * **Backend:** Python 3, Flask, Gunicorn, Pytz
-* **Frontend:** HTML5, CSS3 (with CSS Variables), JavaScript (Fetch API), Bootstrap 5, Font Awesome, Google Fonts (Poppins)
+* **Frontend:** HTML5, CSS3 (with CSS Variables), JavaScript (Fetch API, Service Workers), Bootstrap 5, Font Awesome, Google Fonts (Poppins)
+* **PWA:** Web App Manifest
 * **Containerization:** Docker
 * **CI/CD:** GitHub Actions
 
@@ -91,7 +95,7 @@ A simple yet powerful web application built with Flask to calculate your work en
 
 ## 🔄 CI/CD
 
-This repository uses GitHub Actions to automatically build a Docker image and push it to GitHub Container Registry (`ghcr.io`) whenever code is pushed to the `main` branch.
+This repository uses GitHub Actions to automatically build a multi-arch Docker image (amd64, arm64) and push it to GitHub Container Registry (`ghcr.io`) whenever code is pushed to the `main` branch.
 
 * **Workflow File:** `.github/workflows/docker-image.yml`
 * **Image Name:** `ghcr.io/bifr0est/worktimeweb:latest`
@@ -102,9 +106,9 @@ You can configure your server (e.g., Unraid Docker) to pull and run this image.
 
 * [ ] Client-side input validation (e.g., for break minutes).
 * [ ] Add a "Clear Form" button.
-* [ ] Implement full Progressive Web App (PWA) features:
-    * [ ] Offline caching of app shell.
-    * [ ] Offline calculation functionality (requires JS rewrite of logic).
+* [ ] Enhance PWA features:
+    * [ ] Offline calculation functionality (requires JS rewrite of logic or more advanced service worker caching).
+    * [ ] Add `screenshots` to `manifest.json` for richer install UI.
 * [ ] Add automated tests (unit/integration).
 * [ ] More comprehensive server-side logging.
 
