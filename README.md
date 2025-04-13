@@ -5,7 +5,6 @@
 A simple yet powerful web application built with Flask to calculate your work end time based on your start time, standard work duration (including Fridays), and any extended breaks taken. Features a dynamic interface with AJAX updates, dark mode, progress bar, and basic PWA capabilities.
 
 ![Work Time Tracker Screenshot](assets/screenshot.png)
-_(Suggestion: Add a screenshot or GIF of the app in action here!)_
 
 ## ✨ Features
 
