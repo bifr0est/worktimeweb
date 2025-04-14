@@ -109,15 +109,18 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
     # --- Calculate Worked/Elapsed Time ---
     elapsed_time = now_local - start_datetime_local
     if elapsed_time.total_seconds() < 0: elapsed_time = timedelta(0)
-    elapsed_total_seconds = int(elapsed_time.total_seconds())
+    elapsed_total_seconds = int(elapsed_time.total_seconds()) # Used for progress bar base
     elapsed_hours = elapsed_total_seconds // 3600
     elapsed_minutes = (elapsed_total_seconds % 3600) // 60
-    worked_str = f"{elapsed_hours:02d}h {elapsed_minutes:02d}m"
+    worked_str = f"{elapsed_hours:02d}h {elapsed_minutes:02d}m" # Display string
 
     # --- Calculate Status ---
+    # required_seconds represents the target elapsed time including breaks
     required_seconds = int(required_total_duration.total_seconds() + extra_break_time.total_seconds())
+    # actual_worked_seconds is elapsed minus breaks (useful metric, maybe display later?)
     actual_worked_seconds = elapsed_total_seconds - int(entered_break_duration.total_seconds())
     if actual_worked_seconds < 0: actual_worked_seconds = 0
+
     if now_local < end_datetime_local:
         remaining_time = end_datetime_local - now_local; rem_total_seconds = int(remaining_time.total_seconds())
         r_hours = rem_total_seconds // 3600; r_minutes = (rem_total_seconds % 3600) // 60
@@ -130,9 +133,14 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 
     # --- Return Results Dictionary ---
     return {
-        'end_time': end_datetime_local.strftime('%H:%M'), 'day_type': day_type,
-        'worked': worked_str, 'status': status, 'worked_seconds': actual_worked_seconds,
-        'required_seconds': required_seconds, 'break_seconds': int(entered_break_duration.total_seconds()),
+        'end_time': end_datetime_local.strftime('%H:%M'),
+        'day_type': day_type,
+        'worked': worked_str, # This is Elapsed Time String
+        'status': status,
+        'actual_worked_seconds': actual_worked_seconds, # Actual work done (excluding breaks)
+        'elapsed_seconds': elapsed_total_seconds, # Elapsed time since start
+        'required_seconds': required_seconds, # Target elapsed time
+        'break_seconds': int(entered_break_duration.total_seconds()),
         'timezone': LOCAL_TZ.zone
     }
 
@@ -151,7 +159,6 @@ def calculate_route():
     data = request.json
     if not data: return jsonify({"error": "Invalid request format."}), 400
 
-    # Use .get with defaults for robustness, though JS sends them
     start_time_str = data.get('start_time', '').strip()
     long_break_checked = data.get('long_break', False)
     break_hours_str = data.get('break_hours', '0')
@@ -164,10 +171,8 @@ def calculate_route():
         )
         return jsonify(result_data)
     except CalculationError as e:
-        # Handle specific calculation errors
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        # Catch any other unexpected errors
         app.logger.error(f"Unexpected calculation error: {e}", exc_info=True)
         return jsonify({"error": "An unexpected calculation error occurred."}), 500
 
@@ -176,19 +181,14 @@ def calculate_route():
 @app.after_request
 def add_security_headers(response):
     """Adds security headers to all responses."""
-    response.headers['Cache-Control'] = 'public, max-age=3600' # Cache static assets
+    response.headers['Cache-Control'] = 'public, max-age=3600'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers.pop('Server', None) # Remove server identification
-    # Consider adding Content-Security-Policy header here for extra security
-    # response.headers['Content-Security-Policy'] = "default-src 'self'; ..."
+    response.headers.pop('Server', None)
     return response
 
 # --- Main Execution Guard ---
 
 if __name__ == '__main__':
-    # Debug mode should be disabled in production (controlled by env var or config)
     debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    # Use 0.0.0.0 to be accessible within Docker container network
-    # Port 5000 is standard for Flask dev, Gunicorn binds in production (Dockerfile)
     app.run(host='0.0.0.0', port=5000, debug=debug_mode)
