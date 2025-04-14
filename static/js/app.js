@@ -5,6 +5,7 @@ const LS_START_TIME_KEY = 'worktimeweb_startTime';
 const LS_LONG_BREAK_KEY = 'worktimeweb_longBreakChecked';
 const LS_BREAK_HOURS_KEY = 'worktimeweb_breakHours';
 const LS_BREAK_MINUTES_KEY = 'worktimeweb_breakMinutes';
+const LS_AUTO_REFRESH_KEY = 'worktimeweb_autoRefreshChecked';
 
 // --- Element References ---
 const calculateButton = document.getElementById('calculate-button');
@@ -35,6 +36,7 @@ function loadSavedValues() {
     const savedLongBreak = localStorage.getItem(LS_LONG_BREAK_KEY);
     const savedBreakHours = localStorage.getItem(LS_BREAK_HOURS_KEY);
     const savedBreakMinutes = localStorage.getItem(LS_BREAK_MINUTES_KEY);
+    const savedAutoRefresh = localStorage.getItem(LS_AUTO_REFRESH_KEY); // <-- Added Load
 
     if (savedStartTime && startTimeInput) {
         startTimeInput.value = savedStartTime;
@@ -48,6 +50,17 @@ function loadSavedValues() {
     if (savedBreakMinutes && breakMinutesInput) {
         breakMinutesInput.value = savedBreakMinutes;
     }
+     if (savedAutoRefresh && autoRefreshCheckbox) { // <-- Added Load Logic
+         autoRefreshCheckbox.checked = (savedAutoRefresh === 'true');
+         // --- Trigger action based on loaded state ---
+         if (autoRefreshCheckbox.checked) {
+             // Only start if results are already displayed perhaps? Or just start.
+             // Let's start it regardless, performCalculation handles missing time.
+             startAutoRefresh();
+         }
+         // --- End trigger ---
+     }
+
 
     // Update break details visibility based on loaded checkbox state
     if (longBreakCheckbox) {
@@ -57,11 +70,12 @@ function loadSavedValues() {
 
 // --- Save Values to Local Storage ---
 function saveCurrentValues() {
+    // Saves inputs after a successful calculation
     if (startTimeInput) {
         localStorage.setItem(LS_START_TIME_KEY, startTimeInput.value);
     }
     if (longBreakCheckbox) {
-        localStorage.setItem(LS_LONG_BREAK_KEY, longBreakCheckbox.checked); // Saves boolean as 'true'/'false'
+        localStorage.setItem(LS_LONG_BREAK_KEY, longBreakCheckbox.checked);
     }
     if (breakHoursInput) {
         localStorage.setItem(LS_BREAK_HOURS_KEY, breakHoursInput.value);
@@ -69,6 +83,7 @@ function saveCurrentValues() {
     if (breakMinutesInput) {
         localStorage.setItem(LS_BREAK_MINUTES_KEY, breakMinutesInput.value);
     }
+    // Auto-refresh state is saved in its own event listener now
 }
 
 
@@ -76,17 +91,15 @@ function saveCurrentValues() {
 if (themeToggle) { // Check if element exists
     themeToggle.addEventListener('change', () => {
         document.body.classList.toggle('dark-mode');
-        // Note: Theme preference is not saved and will reset on reload.
     });
 }
 
 
 // --- Break Input Visibility ---
 function toggleBreakDetails() {
-     if (!breakDetailsDiv) return; // Check if element exists
-     // Use requestAnimationFrame for smoother transitions if needed
+     if (!breakDetailsDiv) return;
      requestAnimationFrame(() => {
-         if (longBreakCheckbox && longBreakCheckbox.checked) { // Check element exists
+         if (longBreakCheckbox && longBreakCheckbox.checked) {
              breakDetailsDiv.style.maxHeight = breakDetailsDiv.scrollHeight + "px";
              breakDetailsDiv.style.opacity = '1';
              breakDetailsDiv.style.marginTop = '1rem';
@@ -96,7 +109,6 @@ function toggleBreakDetails() {
              breakDetailsDiv.style.maxHeight = '0';
              breakDetailsDiv.style.opacity = '0';
              breakDetailsDiv.style.marginTop = '0';
-             // Delay hiding padding/border for transition out effect
              setTimeout(() => { if (!longBreakCheckbox || !longBreakCheckbox.checked) { breakDetailsDiv.style.padding = '0 1rem'; breakDetailsDiv.style.border = 'none'; } }, 400);
          }
      });
@@ -108,7 +120,7 @@ if (longBreakCheckbox) { // Check if element exists
 
 // --- Error Handling ---
 function showError(message) {
-    if(errorMessage && errorDisplay && resultsDisplay) { // Check elements exist
+    if(errorMessage && errorDisplay && resultsDisplay) {
         errorMessage.textContent = message;
         errorDisplay.classList.remove('d-none');
         resultsDisplay.classList.add('d-none');
@@ -120,7 +132,6 @@ function hideError() {
 
 // --- Update Results Display ---
 function updateResults(data) {
-    // Check if all result elements exist
     if(!resultEndTime || !resultDayType || !resultWorked || !resultStatus || !resultTimezone || !resultsDisplay) return;
 
      resultEndTime.textContent = data.end_time;
@@ -169,8 +180,14 @@ async function performCalculation() {
     if (isCalculating) return;
 
     hideError();
-    // Check if start time input exists and is valid
     if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
+        // Don't necessarily show error if auto-refreshing with no time yet
+        if(document.activeElement !== startTimeInput && refreshInterval !== null) {
+            // If auto-refresh is running and input is empty/invalid but not focused, just stop
+             console.log("Auto-refresh calculation skipped: Invalid start time.");
+             setLoadingState(false); // Ensure button re-enables if loading was triggered
+             return;
+        }
         showError("Please enter a valid start time.");
         return;
     }
@@ -178,7 +195,6 @@ async function performCalculation() {
 
     setLoadingState(true);
 
-    // Read values safely, checking if elements exist
     const dataToSend = {
         start_time: startTimeInput.value,
         long_break: longBreakCheckbox ? longBreakCheckbox.checked : false,
@@ -199,7 +215,7 @@ async function performCalculation() {
             showError(result.error || `Server Error: ${response.statusText}`);
         } else {
             updateResults(result);
-            // --- Save values on successful calculation ---
+            // --- Save input values on successful calculation ---
             saveCurrentValues();
         }
     } catch (error) {
@@ -228,17 +244,28 @@ if (startTimeInput) {
 // --- Auto-Refresh Logic ---
 function startAutoRefresh(){
      if (refreshInterval === null) {
-         performCalculation();
+         // Perform calculation immediately ONLY if start time is valid
+         if (startTimeInput && startTimeInput.value && startTimeInput.checkValidity()){
+            performCalculation();
+         } else {
+             console.log("Auto-refresh enabled, but initial calculation skipped: Invalid start time.")
+         }
          refreshInterval = setInterval(performCalculation, 60000);
+         console.log("Auto-refresh interval started."); // Optional log
      }
  }
  function stopAutoRefresh(){
-     clearInterval(refreshInterval);
-     refreshInterval = null;
+     if (refreshInterval !== null) {
+         clearInterval(refreshInterval);
+         refreshInterval = null;
+         console.log("Auto-refresh stopped."); // Optional log
+     }
  }
 
 if (autoRefreshCheckbox) {
     autoRefreshCheckbox.addEventListener('change', function() {
+        // Save state immediately when changed
+        localStorage.setItem(LS_AUTO_REFRESH_KEY, autoRefreshCheckbox.checked); // <-- Added Save Logic Here
         if(autoRefreshCheckbox.checked) {
             startAutoRefresh();
         } else {
@@ -249,17 +276,14 @@ if (autoRefreshCheckbox) {
 
 // --- Initial Setup on DOM Load ---
 document.addEventListener('DOMContentLoaded', () => {
-    loadSavedValues(); // Load values after DOM is ready
-    // Any other setup that needs the DOM
+    loadSavedValues(); // Load values AFTER DOM is ready
 });
 
 
 // --- Service Worker Registration ---
-// (Keep this registration code as it was, moved from index.html)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register("/static/service-worker.js") // Assuming reverted path
-    // Or use "/service-worker.js" if using root path method
       .then(registration => {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
       })
