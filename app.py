@@ -2,7 +2,7 @@
 import os
 import logging
 from datetime import datetime, timedelta
-# send_file is not needed when serving PWA files from /static
+# Removed url_for as it's no longer needed in add_headers for SW path
 from flask import Flask, render_template, request, jsonify
 import pytz
 
@@ -13,6 +13,7 @@ def get_env_int(key, default):
     try:
         return int(os.getenv(key, default))
     except ValueError:
+        # Use standard logging here as app context might not be available
         logging.warning(f"Invalid integer value for env var {key}. Using default: {default}")
         return default
 
@@ -36,8 +37,8 @@ def get_local_timezone():
     try:
         return pytz.timezone(tz_name)
     except pytz.UnknownTimeZoneError:
-        # Use app logger if app context is available, otherwise default logger
-        logger = app.logger if app else logging.getLogger()
+        # Directly use standard logging if the timezone name is invalid
+        logger = logging.getLogger(__name__)
         logger.warning(f"Unknown timezone '{tz_name}', falling back to UTC.")
         return pytz.utc
 
@@ -46,8 +47,14 @@ LOCAL_TZ = get_local_timezone() # Get timezone once on startup
 # --- App Setup ---
 # Relies on default 'static' folder convention for CSS, JS, manifest, SW etc.
 app = Flask(__name__)
+
+# !!! IMPORTANT: Set the FLASK_SECRET_KEY environment variable to a strong, random value in production!
+# The default key below is INSECURE and for development ONLY.
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default-dev-secret-key-insecure")
-logging.basicConfig(level=logging.INFO) # Basic logging config
+
+# Configure Flask logging
+logging.basicConfig(level=logging.INFO) # Basic logging config for startup
+app.logger.setLevel(logging.INFO) # Ensure Flask app logger level is set
 
 # --- Calculation Logic Helper ---
 
@@ -65,13 +72,15 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 
     now_local = datetime.now(LOCAL_TZ)
     try:
+        # Combine the current date with the parsed start time
         start_datetime_local = LOCAL_TZ.localize(datetime.combine(now_local.date(), start_time_naive))
     except Exception as e:
          app.logger.error(f"Error localizing start time: {e}", exc_info=True)
          raise CalculationError("Could not determine start datetime.")
 
+    # Check if start time is in the future relative to current time
     if now_local < start_datetime_local:
-        raise CalculationError("Start time appears to be in the future.")
+        raise CalculationError("Start time cannot be in the future relative to the current time.")
 
     # --- Determine Work Duration ---
     day_of_week = start_datetime_local.weekday() # Monday is 0, Sunday is 6
@@ -84,7 +93,8 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
         required_total_duration = base_work_duration + STANDARD_BREAK
         day_type = f"Friday ({required_total_duration.total_seconds() / 3600:.2f}h)"
     else: # Weekend
-        raise CalculationError("It's the weekend!")
+        # Changed error message to be more informational
+        raise CalculationError("Calculations are not applicable on weekends.")
 
     # --- Calculate Break Adjustment ---
     entered_break_duration = timedelta(0)
@@ -96,40 +106,58 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
             if break_hours < 0 or break_minutes < 0 or break_minutes >= 60:
                 raise ValueError("Invalid break time values.")
             entered_break_duration = timedelta(hours=break_hours, minutes=break_minutes)
+            # Calculate extra break time ONLY if entered break exceeds standard break
             if entered_break_duration > STANDARD_BREAK:
                 extra_break_time = entered_break_duration - STANDARD_BREAK
+            else:
+                # If entered break is less than or equal to standard, treat it as standard for end time calculation
+                entered_break_duration = STANDARD_BREAK
+                extra_break_time = timedelta(0)
+
         except (ValueError, TypeError):
-             raise CalculationError("Invalid break time entered.")
+             raise CalculationError("Invalid break time entered. Please use whole numbers.")
     else:
+        # If no long break, use the standard break duration
         entered_break_duration = STANDARD_BREAK
+        extra_break_time = timedelta(0) # Ensure extra break is zero
 
     # --- Calculate End Time ---
+    # End time is start time + base work duration + the *total* entered break duration
+    # If long_break wasn't checked, entered_break_duration is STANDARD_BREAK
+    # If long_break was checked, entered_break_duration is the value entered by the user
     end_datetime_local = start_datetime_local + base_work_duration + entered_break_duration
 
     # --- Calculate Worked/Elapsed Time ---
     elapsed_time = now_local - start_datetime_local
     if elapsed_time.total_seconds() < 0: elapsed_time = timedelta(0)
-    elapsed_total_seconds = int(elapsed_time.total_seconds()) # Used for progress bar base
+    elapsed_total_seconds = int(elapsed_time.total_seconds())
     elapsed_hours = elapsed_total_seconds // 3600
     elapsed_minutes = (elapsed_total_seconds % 3600) // 60
-    worked_str = f"{elapsed_hours:02d}h {elapsed_minutes:02d}m" # Display string
+    worked_str = f"{elapsed_hours:02d}h {elapsed_minutes:02d}m"
 
     # --- Calculate Status ---
-    # required_seconds represents the target elapsed time including breaks
-    required_seconds = int(required_total_duration.total_seconds() + extra_break_time.total_seconds())
-    # actual_worked_seconds is elapsed minus breaks (useful metric, maybe display later?)
-    actual_worked_seconds = elapsed_total_seconds - int(entered_break_duration.total_seconds())
-    if actual_worked_seconds < 0: actual_worked_seconds = 0
+    # Required total duration includes the standard break
+    required_seconds = int(required_total_duration.total_seconds())
+    # Adjust required seconds if extra break time was taken
+    # Note: end_datetime_local already accounts for the full entered break
+    # required_seconds represents the target duration *without* extra break time for progress calculation baseline
 
+    # Calculate status based on comparison with the calculated end time
     if now_local < end_datetime_local:
-        remaining_time = end_datetime_local - now_local; rem_total_seconds = int(remaining_time.total_seconds())
-        r_hours = rem_total_seconds // 3600; r_minutes = (rem_total_seconds % 3600) // 60
+        remaining_time = end_datetime_local - now_local
+        rem_total_seconds = int(remaining_time.total_seconds())
+        r_hours = rem_total_seconds // 3600
+        r_minutes = (rem_total_seconds % 3600) // 60
         status = f"Remaining: {r_hours:02d}h {r_minutes:02d}m"
     else:
-        overtime = now_local - end_datetime_local; over_total_seconds = int(overtime.total_seconds())
-        o_hours = over_total_seconds // 3600; o_minutes = (over_total_seconds % 3600) // 60
+        overtime = now_local - end_datetime_local
+        over_total_seconds = int(overtime.total_seconds())
+        o_hours = over_total_seconds // 3600
+        o_minutes = (over_total_seconds % 3600) // 60
         status = f"Overtime: {o_hours:02d}h {o_minutes:02d}m"
-        if extra_break_time > timedelta(0): status += f" (incl. {int(extra_break_time.total_seconds() / 60)} min extra break)"
+        # Optionally indicate if extra break contributed
+        if extra_break_time > timedelta(0):
+             status += f" (incl. {int(extra_break_time.total_seconds() / 60)} min extra break)"
 
     # --- Return Results Dictionary ---
     return {
@@ -137,10 +165,9 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
         'day_type': day_type,
         'worked': worked_str, # This is Elapsed Time String
         'status': status,
-        'actual_worked_seconds': actual_worked_seconds, # Actual work done (excluding breaks)
-        'elapsed_seconds': elapsed_total_seconds, # Elapsed time since start
-        'required_seconds': required_seconds, # Target elapsed time
-        'break_seconds': int(entered_break_duration.total_seconds()),
+        'elapsed_seconds': elapsed_total_seconds, # Total time since start
+        'required_seconds': required_seconds, # Target work duration including standard break
+        'break_seconds': int(entered_break_duration.total_seconds()), # Actual break duration used
         'timezone': LOCAL_TZ.zone
     }
 
@@ -149,20 +176,25 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    return render_template('index.html',
-                           start_time_value='', long_break_checked=False,
-                           break_hours_value='0', break_minutes_value='0')
+    return render_template('index.html') # Removed unused template variables
 
 @app.route('/calculate', methods=['POST'])
 def calculate_route():
     """Handles calculation requests via AJAX and returns JSON."""
     data = request.json
-    if not data: return jsonify({"error": "Invalid request format."}), 400
+    if not data:
+        app.logger.warning("Received empty/invalid JSON data.")
+        return jsonify({"error": "Invalid request format."}), 400
 
+    # Get data safely using .get() with defaults
     start_time_str = data.get('start_time', '').strip()
     long_break_checked = data.get('long_break', False)
-    break_hours_str = data.get('break_hours', '0')
-    break_minutes_str = data.get('break_minutes', '0')
+    break_hours_str = data.get('break_hours', '0').strip()
+    break_minutes_str = data.get('break_minutes', '0').strip()
+
+    # Basic check for start time presence
+    if not start_time_str:
+        return jsonify({"error": "Start time is required."}), 400
 
     try:
         result_data = perform_time_calculations(
@@ -171,24 +203,44 @@ def calculate_route():
         )
         return jsonify(result_data)
     except CalculationError as e:
-        return jsonify({"error": str(e)}), 400
+        # Log calculation errors specifically
+        app.logger.info(f"CalculationError: {e}")
+        return jsonify({"error": str(e)}), 400 # Return 400 for expected calculation issues
     except Exception as e:
+        # Log unexpected errors
         app.logger.error(f"Unexpected calculation error: {e}", exc_info=True)
-        return jsonify({"error": "An unexpected calculation error occurred."}), 500
+        return jsonify({"error": "An unexpected server error occurred."}), 500
 
-# --- Security Headers ---
+# --- Headers and Service Worker Scope Handling ---
 
 @app.after_request
-def add_security_headers(response):
-    """Adds security headers to all responses."""
-    response.headers['Cache-Control'] = 'public, max-age=3600'
+def add_headers(response):
+    """Adds security headers and Service-Worker-Allowed header."""
+
+    # Add security headers
+    response.headers['Cache-Control'] = 'public, max-age=3600' # Allow caching for 1 hour
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers.pop('Server', None)
+    response.headers.pop('Server', None) # Remove default Server header
+
+    # --- Add Service-Worker-Allowed header ONLY for the service worker script ---
+    # Directly compare request path to the known static path for the service worker
+    # This avoids needing app context or url_for within the request hook
+    sw_path = '/static/service-worker.js'
+    if request.path == sw_path:
+        response.headers['Service-Worker-Allowed'] = '/'
+        # Optional: log when header is added for debugging
+        # app.logger.debug(f"Added Service-Worker-Allowed header for {request.path}")
+
     return response
 
 # --- Main Execution Guard ---
 
 if __name__ == '__main__':
-    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
+    # Use Gunicorn in production instead of Flask's built-in server
+    # The Flask dev server is run via 'flask run' command which respects FLASK_DEBUG
+    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1", "t")
+    # Port can also be configured via environment variable if needed
+    port = int(os.getenv("PORT", 5000))
+    # host='0.0.0.0' makes it accessible externally, crucial for Docker/deployment
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
