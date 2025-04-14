@@ -78,11 +78,20 @@ function toggleBreakDetails() {
 if (longBreakCheckbox) { longBreakCheckbox.addEventListener('change', toggleBreakDetails); }
 
 // --- Error Handling ---
-function showError(message) { /* ... as before ... */ }
-function hideError() { /* ... as before ... */ }
+function showError(message) {
+    if(errorMessage && errorDisplay && resultsDisplay) {
+        errorMessage.textContent = message;
+        errorDisplay.classList.remove('d-none');
+        resultsDisplay.classList.add('d-none');
+    }
+}
+function hideError() {
+    if(errorDisplay) errorDisplay.classList.add('d-none');
+}
 
 // --- Update Results Display ---
 function updateResults(data) {
+    // Check if all result elements exist
     if(!resultEndTime || !resultDayType || !resultWorked || !resultStatus || !resultTimezone || !resultsDisplay) return;
 
      resultEndTime.textContent = data.end_time;
@@ -91,37 +100,57 @@ function updateResults(data) {
      resultStatus.textContent = data.status;
      resultTimezone.textContent = data.timezone;
 
-     // --- ### UPDATED PROGRESS BAR LOGIC ### ---
+     // --- ### CORRECTED PROGRESS BAR LOGIC ### ---
      // Use elapsed_seconds vs required_seconds now
      if (progressBarContainer && progressBarInner && data.required_seconds != null && data.elapsed_seconds != null && data.required_seconds > 0) {
           let progressPercent = 0;
           // Check if required ELAPSED time is met or exceeded
-          if (data.elapsed_seconds >= data.required_seconds) {
+          if (data.elapsed_seconds >= data.required_seconds) { // <<< Uses elapsed_seconds
               progressPercent = 100; // Explicitly set to 100%
           } else {
               // Calculate percentage based on elapsed time vs required elapsed time
-              let progress = Math.max(0, (data.elapsed_seconds / data.required_seconds) * 100);
+              let progress = Math.max(0, (data.elapsed_seconds / data.required_seconds) * 100); // <<< Uses elapsed_seconds
               progressPercent = Math.round(progress);
           }
           // Update the progress bar UI
           progressBarInner.style.width = progressPercent + '%';
           progressBarInner.textContent = progressPercent + '%';
           progressBarInner.setAttribute('aria-valuenow', progressPercent);
-          progressBarContainer.classList.remove('d-none');
+          progressBarContainer.classList.remove('d-none'); // Make sure container is shown
      } else if(progressBarContainer) {
-          // Hide if required seconds is 0 (e.g., weekend)
+          // Hide if required seconds is 0 (e.g., weekend) or data missing
           progressBarContainer.classList.add('d-none');
      }
-     // --- ### END UPDATED PROGRESS BAR LOGIC ### ---
+     // --- ### END CORRECTED PROGRESS BAR LOGIC ### ---
 
      resultsDisplay.classList.remove('d-none');
 }
 
 // --- Set Loading State ---
-function setLoadingState(loading) { /* ... as before ... */ }
+function setLoadingState(loading) {
+    isCalculating = loading;
+    if (calculateButton) {
+        calculateButton.disabled = loading;
+        const spinner = calculateButton.querySelector('.spinner-border');
+        const buttonText = calculateButton.querySelector('.button-text');
+        const buttonIcon = calculateButton.querySelector('.button-icon');
+
+        if (loading) {
+            spinner?.classList.remove('d-none');
+            if(buttonText) buttonText.textContent = 'Calculating...';
+            buttonIcon?.classList.add('d-none');
+        } else {
+            spinner?.classList.add('d-none');
+            if(buttonText) buttonText.textContent = 'Calculate';
+            buttonIcon?.classList.remove('d-none');
+        }
+    }
+}
+
 // --- Perform Calculation (AJAX) ---
-async function performCalculation() { /* ... mostly as before ... */
+async function performCalculation() {
     if (isCalculating) return;
+
     hideError();
     if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
         if(document.activeElement !== startTimeInput && refreshInterval !== null) {
@@ -130,20 +159,39 @@ async function performCalculation() { /* ... mostly as before ... */
         }
         showError("Please enter a valid start time."); return;
     }
+    // TODO: Add client-side validation for break inputs here
+
     setLoadingState(true);
+
     const dataToSend = {
         start_time: startTimeInput.value,
         long_break: longBreakCheckbox ? longBreakCheckbox.checked : false,
         break_hours: breakHoursInput ? breakHoursInput.value || '0' : '0',
         break_minutes: breakMinutesInput ? breakMinutesInput.value || '0' : '0'
     };
+
     try {
-        const response = await fetch('/calculate', { /* ... */ body: JSON.stringify(dataToSend) });
+        const response = await fetch('/calculate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', },
+            body: JSON.stringify(dataToSend),
+        });
+
         const result = await response.json();
-        if (!response.ok) { showError(result.error || `Server Error: ${response.statusText}`); }
-        else { updateResults(result); saveCurrentValues(); }
-    } catch (error) { console.error("Fetch error:", error); showError(`Network error: ${error.message}`); }
-    finally { setLoadingState(false); }
+
+        if (!response.ok) {
+            showError(result.error || `Server Error: ${response.statusText}`);
+        } else {
+            updateResults(result);
+            // --- Save input values on successful calculation ---
+            saveCurrentValues();
+        }
+    } catch (error) {
+        console.error("Fetch error:", error);
+        showError(`Network error: ${error.message}`);
+    } finally {
+        setLoadingState(false);
+    }
 }
 
 // --- Event Listeners ---
@@ -154,15 +202,12 @@ if (startTimeInput) { startTimeInput.addEventListener('keypress', function(event
 function startAutoRefresh(){
      if (refreshInterval === null) {
          if (startTimeInput && startTimeInput.value && startTimeInput.checkValidity()){ performCalculation(); }
-         // else { console.log("Auto-refresh enabled, but initial calculation skipped: Invalid start time.") }
          refreshInterval = setInterval(performCalculation, 60000);
-         // console.log("Auto-refresh interval started.");
      }
  }
  function stopAutoRefresh(){
      if (refreshInterval !== null) {
          clearInterval(refreshInterval); refreshInterval = null;
-         // console.log("Auto-refresh stopped.");
      }
  }
 if (autoRefreshCheckbox) { autoRefreshCheckbox.addEventListener('change', function() { localStorage.setItem(LS_AUTO_REFRESH_KEY, autoRefreshCheckbox.checked); if(autoRefreshCheckbox.checked) { startAutoRefresh(); } else { stopAutoRefresh(); } }); }
