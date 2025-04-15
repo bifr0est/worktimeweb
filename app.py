@@ -110,9 +110,9 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
             if entered_break_duration > STANDARD_BREAK:
                 extra_break_time = entered_break_duration - STANDARD_BREAK
             else:
-                # If entered break is less than or equal to standard, treat it as standard for end time calculation
-                entered_break_duration = STANDARD_BREAK
-                extra_break_time = timedelta(0)
+                # If entered break is less than or equal to standard, treat it as standard for end time calculation BUT NO extra time
+                entered_break_duration = STANDARD_BREAK # Correction: Use actual entered time if <= standard
+                extra_break_time = timedelta(0)          # Ensure no extra time if break <= standard
 
         except (ValueError, TypeError):
              raise CalculationError("Invalid break time entered. Please use whole numbers.")
@@ -123,8 +123,6 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 
     # --- Calculate End Time ---
     # End time is start time + base work duration + the *total* entered break duration
-    # If long_break wasn't checked, entered_break_duration is STANDARD_BREAK
-    # If long_break was checked, entered_break_duration is the value entered by the user
     end_datetime_local = start_datetime_local + base_work_duration + entered_break_duration
 
     # --- Calculate Worked/Elapsed Time ---
@@ -138,9 +136,13 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
     # --- Calculate Status ---
     # Required total duration includes the standard break
     required_seconds = int(required_total_duration.total_seconds())
-    # Adjust required seconds if extra break time was taken
-    # Note: end_datetime_local already accounts for the full entered break
-    # required_seconds represents the target duration *without* extra break time for progress calculation baseline
+
+    # *** FIX FOR PROGRESS BAR ***
+    # Adjust required_seconds to account for any extra break time taken
+    # This ensures the progress bar target reflects the actual total time needed
+    if extra_break_time > timedelta(0):
+        required_seconds += int(extra_break_time.total_seconds())
+    # *** END FIX ***
 
     # Calculate status based on comparison with the calculated end time
     if now_local < end_datetime_local:
@@ -166,7 +168,7 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
         'worked': worked_str, # This is Elapsed Time String
         'status': status,
         'elapsed_seconds': elapsed_total_seconds, # Total time since start
-        'required_seconds': required_seconds, # Target work duration including standard break
+        'required_seconds': required_seconds, # Target duration INCLUDING standard AND extra break time
         'break_seconds': int(entered_break_duration.total_seconds()), # Actual break duration used
         'timezone': LOCAL_TZ.zone
     }
@@ -176,7 +178,7 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    return render_template('index.html') # Removed unused template variables
+    return render_template('index.html')
 
 @app.route('/calculate', methods=['POST'])
 def calculate_route():
@@ -186,7 +188,7 @@ def calculate_route():
         app.logger.warning("Received empty/invalid JSON data.")
         return jsonify({"error": "Invalid request format."}), 400
 
-    # Get data safely using .get() with defaults
+    # Get data safely using .get() with defaults and strip whitespace
     start_time_str = data.get('start_time', '').strip()
     long_break_checked = data.get('long_break', False)
     break_hours_str = data.get('break_hours', '0').strip()
@@ -225,7 +227,6 @@ def add_headers(response):
 
     # --- Add Service-Worker-Allowed header ONLY for the service worker script ---
     # Directly compare request path to the known static path for the service worker
-    # This avoids needing app context or url_for within the request hook
     sw_path = '/static/service-worker.js'
     if request.path == sw_path:
         response.headers['Service-Worker-Allowed'] = '/'
