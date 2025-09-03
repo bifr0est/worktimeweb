@@ -40,11 +40,14 @@ MAX_BREAK_HOURS = 23
 MIN_BREAK_MINUTES = 0
 MAX_BREAK_MINUTES = 59
 
+# Default configuration
+DEFAULT_TIMEZONE = "Europe/Vienna"
+
 # --- Timezone Helper ---
 
 def get_local_timezone():
     """Gets the configured timezone or defaults to Europe/Vienna."""
-    tz_name = os.getenv("TIMEZONE", "Europe/Vienna")
+    tz_name = os.getenv("TIMEZONE", DEFAULT_TIMEZONE)
     try:
         return pytz.timezone(tz_name)
     except pytz.UnknownTimeZoneError:
@@ -77,9 +80,8 @@ def format_time_duration(total_seconds):
     minutes = (total_seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE
     return f"{hours:02d}h {minutes:02d}m"
 
-def perform_time_calculations(start_time_str, long_break_checked, break_hours_str, break_minutes_str):
-    """Performs the core time tracking calculations."""
-    # --- Time Parsing and Timezone Conversion ---
+def parse_start_time(start_time_str):
+    """Parse and validate start time string."""
     try:
         start_time_naive = datetime.strptime(start_time_str, '%H:%M').time()
     except ValueError:
@@ -87,32 +89,37 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
 
     now_local = datetime.now(LOCAL_TZ)
     try:
-        # Combine the current date with the parsed start time
         start_datetime_local = LOCAL_TZ.localize(datetime.combine(now_local.date(), start_time_naive))
-    except Exception as e:
-         app.logger.error(f"Error localizing start time: {e}", exc_info=True)
-         raise CalculationError("Could not process start time. Please check the time format.")
+    except (pytz.AmbiguousTimeError, pytz.NonExistentTimeError, AttributeError) as e:
+        app.logger.error(f"Error localizing start time: {e}", exc_info=True)
+        raise CalculationError("Could not process start time. Please check the time format.")
 
-    # Check if start time is in the future relative to current time
     if now_local < start_datetime_local:
         raise CalculationError("Start time cannot be in the future.")
 
-    # --- Determine Work Duration ---
+    return start_datetime_local, now_local
+
+def determine_work_duration(start_datetime_local):
+    """Determine work duration based on day of week."""
     day_of_week = start_datetime_local.weekday()
-    if day_of_week < FRIDAY: # Mon-Thu
+    if day_of_week < FRIDAY:  # Mon-Thu
         base_work_duration = WORK_DURATION_REGULAR_NO_BREAK
         required_total_duration = base_work_duration + STANDARD_BREAK
         day_type = f"Regular ({required_total_duration.total_seconds() / SECONDS_PER_HOUR:.2f}h)"
-    elif day_of_week == FRIDAY: # Fri
+    elif day_of_week == FRIDAY:  # Fri
         base_work_duration = WORK_DURATION_FRIDAY_NO_BREAK
         required_total_duration = base_work_duration + STANDARD_BREAK
         day_type = f"Friday ({required_total_duration.total_seconds() / SECONDS_PER_HOUR:.2f}h)"
-    else: # Weekend
+    else:  # Weekend
         raise CalculationError("Work time calculations are not available for weekends.")
+    
+    return base_work_duration, required_total_duration, day_type
 
-    # --- Calculate Break Adjustment ---
+def calculate_break_duration(long_break_checked, break_hours_str, break_minutes_str):
+    """Calculate break duration and extra break time."""
     entered_break_duration = timedelta(0)
     extra_break_time = timedelta(0)
+    
     if long_break_checked:
         try:
             break_hours = int(break_hours_str)
@@ -120,68 +127,76 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
             if (break_hours < MIN_BREAK_HOURS or break_hours > MAX_BREAK_HOURS or 
                 break_minutes < MIN_BREAK_MINUTES or break_minutes > MAX_BREAK_MINUTES):
                 raise ValueError(f"Break time must be between {MIN_BREAK_HOURS}-{MAX_BREAK_HOURS} hours and {MIN_BREAK_MINUTES}-{MAX_BREAK_MINUTES} minutes.")
+            
             entered_break_duration = timedelta(hours=break_hours, minutes=break_minutes)
-            # Calculate extra break time ONLY if entered break exceeds standard break
             if entered_break_duration > STANDARD_BREAK:
                 extra_break_time = entered_break_duration - STANDARD_BREAK
             else:
-                # If entered break is less than or equal to standard, treat it as standard for end time calculation BUT NO extra time
-                entered_break_duration = STANDARD_BREAK # Correction: Use actual entered time if <= standard
-                extra_break_time = timedelta(0)          # Ensure no extra time if break <= standard
+                entered_break_duration = STANDARD_BREAK
+                extra_break_time = timedelta(0)
 
         except ValueError as ve:
-             # Re-raise our custom validation error message
-             raise CalculationError(str(ve))
+            raise CalculationError(str(ve))
         except TypeError:
-             raise CalculationError("Invalid break time format. Please enter whole numbers only.")
+            raise CalculationError("Invalid break time format. Please enter whole numbers only.")
     else:
-        # If no long break, use the standard break duration
         entered_break_duration = STANDARD_BREAK
-        extra_break_time = timedelta(0) # Ensure extra break is zero
+        extra_break_time = timedelta(0)
 
-    # --- Calculate End Time ---
-    # End time is start time + base work duration + the *total* entered break duration
-    end_datetime_local = start_datetime_local + base_work_duration + entered_break_duration
+    return entered_break_duration, extra_break_time
 
-    # --- Calculate Worked/Elapsed Time ---
-    elapsed_time = now_local - start_datetime_local
-    if elapsed_time.total_seconds() < 0: elapsed_time = timedelta(0)
-    elapsed_total_seconds = int(elapsed_time.total_seconds())
-    worked_str = format_time_duration(elapsed_total_seconds)
-
-    # --- Calculate Status ---
-    # Required total duration includes the standard break
-    required_seconds = int(required_total_duration.total_seconds())
-
-    # *** FIX FOR PROGRESS BAR ***
-    # Adjust required_seconds to account for any extra break time taken
-    # This ensures the progress bar target reflects the actual total time needed
-    if extra_break_time > timedelta(0):
-        required_seconds += int(extra_break_time.total_seconds())
-    # *** END FIX ***
-
-    # Calculate status based on comparison with the calculated end time
+def calculate_status(now_local, end_datetime_local, extra_break_time):
+    """Calculate work status (remaining time or overtime)."""
     if now_local < end_datetime_local:
         remaining_time = end_datetime_local - now_local
         rem_total_seconds = int(remaining_time.total_seconds())
-        status = f"Remaining: {format_time_duration(rem_total_seconds)}"
+        return f"Remaining: {format_time_duration(rem_total_seconds)}"
     else:
         overtime = now_local - end_datetime_local
         over_total_seconds = int(overtime.total_seconds())
         status = f"Overtime: {format_time_duration(over_total_seconds)}"
-        # Optionally indicate if extra break contributed
         if extra_break_time > timedelta(0):
-             status += f" (incl. {int(extra_break_time.total_seconds() / SECONDS_PER_MINUTE)} min extra break)"
+            status += f" (incl. {int(extra_break_time.total_seconds() / SECONDS_PER_MINUTE)} min extra break)"
+        return status
 
-    # --- Return Results Dictionary ---
+def perform_time_calculations(start_time_str, long_break_checked, break_hours_str, break_minutes_str):
+    """Performs the core time tracking calculations."""
+    # Parse and validate start time
+    start_datetime_local, now_local = parse_start_time(start_time_str)
+    
+    # Determine work duration based on day of week
+    base_work_duration, required_total_duration, day_type = determine_work_duration(start_datetime_local)
+    
+    # Calculate break duration
+    entered_break_duration, extra_break_time = calculate_break_duration(
+        long_break_checked, break_hours_str, break_minutes_str)
+    
+    # Calculate end time
+    end_datetime_local = start_datetime_local + base_work_duration + entered_break_duration
+    
+    # Calculate elapsed time
+    elapsed_time = now_local - start_datetime_local
+    if elapsed_time.total_seconds() < 0:
+        elapsed_time = timedelta(0)
+    elapsed_total_seconds = int(elapsed_time.total_seconds())
+    worked_str = format_time_duration(elapsed_total_seconds)
+    
+    # Calculate required seconds including extra break time
+    required_seconds = int(required_total_duration.total_seconds())
+    if extra_break_time > timedelta(0):
+        required_seconds += int(extra_break_time.total_seconds())
+    
+    # Calculate status
+    status = calculate_status(now_local, end_datetime_local, extra_break_time)
+    
     return {
         'end_time': end_datetime_local.strftime('%H:%M'),
         'day_type': day_type,
-        'worked': worked_str, # This is Elapsed Time String
+        'worked': worked_str,
         'status': status,
-        'elapsed_seconds': elapsed_total_seconds, # Total time since start
-        'required_seconds': required_seconds, # Target duration INCLUDING standard AND extra break time
-        'break_seconds': int(entered_break_duration.total_seconds()), # Actual break duration used
+        'elapsed_seconds': elapsed_total_seconds,
+        'required_seconds': required_seconds,
+        'break_seconds': int(entered_break_duration.total_seconds()),
         'timezone': LOCAL_TZ.zone
     }
 
@@ -242,8 +257,6 @@ def add_headers(response):
     sw_path = '/static/service-worker.js'
     if request.path == sw_path:
         response.headers['Service-Worker-Allowed'] = '/'
-        # Optional: log when header is added for debugging
-        # app.logger.debug(f"Added Service-Worker-Allowed header for {request.path}")
 
     return response
 
