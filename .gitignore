@@ -1,0 +1,46 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+*.log
+
+# Virtual environment
+virtualenv/
+virtual-env/
+virtualenv-2.7/
+virtualenv-3.4/
+venv/
+env/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.Trashes
+Thumbs.db
+
+# Flask specific
+instance/
+.flaskenv
+
+# SonarQube scanner work directory
+.scannerwork/
