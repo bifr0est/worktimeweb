@@ -55,44 +55,25 @@ self.addEventListener('fetch', event => {
 
   // Use cache-first for app shell assets
   if (isShellAsset) {
-      event.respondWith(
-          caches.match(event.request)
-              .then(response => {
-                  // Cache hit - return response
-                  if (response) {
-                      // console.log(`Service Worker: Serving from cache: ${event.request.url}`);
-                      return response;
-                  }
+      event.respondWith((async () => {
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) {
+              return cachedResponse;
+          }
 
-                  // Not in cache - fetch from network, cache it, and return response
-                  // console.log(`Service Worker: Fetching from network: ${event.request.url}`);
-                  return fetch(event.request).then(
-                      networkResponse => {
-                          // Check if we received a valid response
-                          if(!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                              return networkResponse;
-                          }
-
-                          // IMPORTANT: Clone the response. A response is a stream
-                          // and because we want the browser to consume the response
-                          // as well as the cache consuming the response, we need
-                          // to clone it so we have two streams.
-                          const responseToCache = networkResponse.clone();
-
-                          caches.open(CACHE_NAME)
-                              .then(cache => {
-                                  // console.log(`Service Worker: Caching new resource: ${event.request.url}`);
-                                  cache.put(event.request, responseToCache);
-                              });
-
-                          return networkResponse;
-                      }
-                  ).catch(error => {
-                      console.error('Service Worker: Fetching failed', error);
-                      // Optional: Return a fallback offline page here if needed
-                  });
-              })
-      );
+          try {
+              const networkResponse = await fetch(event.request);
+              if (networkResponse && networkResponse.ok) {
+                  const responseToCache = networkResponse.clone();
+                  const cache = await caches.open(CACHE_NAME);
+                  await cache.put(event.request, responseToCache);
+              }
+              return networkResponse;
+          } catch (error) {
+              console.error('Service Worker: Fetching failed', error);
+              // Optional: Return a fallback offline page here
+          }
+      })());
   } else {
       // For non-shell assets (like the /calculate API call),
       // just fetch from the network (network-first or network-only).
