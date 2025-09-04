@@ -286,12 +286,12 @@ async function performCalculation() {
 
     setLoadingState(true);
 
-    const breakHours = (longBreakCheckbox && longBreakCheckbox.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
-    const breakMinutes = (longBreakCheckbox && longBreakCheckbox.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
+    const breakHours = (longBreakCheckbox?.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
+    const breakMinutes = (longBreakCheckbox?.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
 
     const dataToSend = {
         start_time: startTimeInput.value,
-        long_break: longBreakCheckbox ? longBreakCheckbox.checked : false,
+        long_break: longBreakCheckbox?.checked || false,
         break_hours: String(breakHours),
         break_minutes: String(breakMinutes),
     };
