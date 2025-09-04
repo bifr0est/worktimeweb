@@ -1,0 +1,7 @@
+organization=bifr0est
+projectKey=bifr0est_worktimeweb
+serverUrl=https://sonarcloud.io
+serverVersion=8.0.0.66856
+dashboardUrl=https://sonarcloud.io/dashboard?id=bifr0est_worktimeweb
+ceTaskId=AZkVKIQsjdSKWVucJMLi
+ceTaskUrl=https://sonarcloud.io/api/ce/task?id=AZkVKIQsjdSKWVucJMLi
