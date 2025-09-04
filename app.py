@@ -240,6 +240,8 @@ def calculate_route():
         app.logger.error(f"Unexpected calculation error: {e}", exc_info=True)
         return jsonify({"error": "An unexpected server error occurred."}), 500
 
+
+
 # --- Headers and Service Worker Scope Handling ---
 
 @app.after_request
