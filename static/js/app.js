@@ -218,6 +218,30 @@ function setLoadingState(loading) {
 }
 
 // --- Input Validation ---
+function validateBreakInputs() {
+    if (!breakHoursInput || !breakMinutesInput) {
+        showError("Internal UI Error: Break input fields not found.");
+        return false;
+    }
+
+    const hoursValue = breakHoursInput.value.trim();
+    const minutesValue = breakMinutesInput.value.trim();
+
+    if (hoursValue === '' || isNaN(hoursValue) || parseInt(hoursValue) < 0) {
+        showError("Please enter a valid non-negative number for break hours.");
+        breakHoursInput.focus();
+        return false;
+    }
+
+    if (minutesValue === '' || isNaN(minutesValue) || parseInt(minutesValue) < 0 || parseInt(minutesValue) > 59) {
+        showError("Please enter a valid number between 0 and 59 for break minutes.");
+        breakMinutesInput.focus();
+        return false;
+    }
+
+    return true;
+}
+
 function validateInputs() {
     if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
         showError("Please enter a valid start time (HH:MM).");
@@ -226,25 +250,9 @@ function validateInputs() {
     }
 
     if (longBreakCheckbox && longBreakCheckbox.checked) {
-        if (!breakHoursInput || !breakMinutesInput) {
-            showError("Internal UI Error: Break input fields not found.");
-            return false;
-        }
-
-        const hoursValue = breakHoursInput.value.trim();
-        if (hoursValue === '' || isNaN(hoursValue) || parseInt(hoursValue) < 0) {
-            showError("Please enter a valid non-negative number for break hours.");
-            breakHoursInput.focus();
-            return false;
-        }
-
-        const minutesValue = breakMinutesInput.value.trim();
-        if (minutesValue === '' || isNaN(minutesValue) || parseInt(minutesValue) < 0 || parseInt(minutesValue) > 59) {
-            showError("Please enter a valid number between 0 and 59 for break minutes.");
-            breakMinutesInput.focus();
-            return false;
-        }
+        return validateBreakInputs();
     }
+
     return true;
 }
 
