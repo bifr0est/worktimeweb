@@ -303,16 +303,22 @@ function preCalculationChecks() {
     return true;
 }
 
+function validateAllInputs() {
+    if (!validateStartTime()) {
+        return false;
+    }
+    if (!handleBreakValidation()) {
+        return false;
+    }
+    return true;
+}
+
 async function performCalculation() {
     if (!preCalculationChecks()) {
         return;
     }
 
-    if (!validateStartTime()) {
-        return;
-    }
-
-    if (!handleBreakValidation()) {
+    if (!validateAllInputs()) {
         return;
     }
 
