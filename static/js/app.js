@@ -267,6 +267,18 @@ async function handleResponse(response) {
 }
 
 // --- Perform Calculation (AJAX) ---
+function prepareDataToSend() {
+    const breakHours = (longBreakCheckbox?.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
+    const breakMinutes = (longBreakCheckbox?.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
+
+    return {
+        start_time: startTimeInput.value,
+        long_break: longBreakCheckbox?.checked || false,
+        break_hours: String(breakHours),
+        break_minutes: String(breakMinutes),
+    };
+}
+
 async function performCalculation() {
     if (isCalculating) return;
 
@@ -286,15 +298,7 @@ async function performCalculation() {
 
     setLoadingState(true);
 
-    const breakHours = (longBreakCheckbox?.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
-    const breakMinutes = (longBreakCheckbox?.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
-
-    const dataToSend = {
-        start_time: startTimeInput.value,
-        long_break: longBreakCheckbox?.checked || false,
-        break_hours: String(breakHours),
-        break_minutes: String(breakMinutes),
-    };
+    const dataToSend = prepareDataToSend();
 
     try {
         const response = await fetch('/calculate', {
