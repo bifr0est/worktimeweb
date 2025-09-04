@@ -40,42 +40,61 @@ function getCurrentDateString() {
     return `${year}-${month}-${day}`;
 }
 
-// --- Load Saved Values on Page Load ---
-function loadSavedValues() {
+// --- Functions for Loading Values ---
+function loadStartTime() {
     const savedStartTime = localStorage.getItem(LS_START_TIME_KEY);
     const savedStartTimeDate = localStorage.getItem(LS_START_TIME_DATE_KEY);
-    const savedLongBreak = localStorage.getItem(LS_LONG_BREAK_KEY);
-    const savedBreakHours = localStorage.getItem(LS_BREAK_HOURS_KEY);
-    const savedBreakMinutes = localStorage.getItem(LS_BREAK_MINUTES_KEY);
-    const savedAutoRefresh = localStorage.getItem(LS_AUTO_REFRESH_KEY);
     const todayDateString = getCurrentDateString();
 
-    // Load start time only if saved date matches today
     if (savedStartTime && startTimeInput && savedStartTimeDate === todayDateString) {
         startTimeInput.value = savedStartTime;
     } else if (startTimeInput) {
         startTimeInput.value = ''; // Clear start time if stale
     }
+}
 
-    // Load other settings
-    if (savedLongBreak && longBreakCheckbox) { longBreakCheckbox.checked = (savedLongBreak === 'true'); }
-    if (savedBreakHours && breakHoursInput) { breakHoursInput.value = savedBreakHours; }
-    if (savedBreakMinutes && breakMinutesInput) { breakMinutesInput.value = savedBreakMinutes; }
+function loadBreakSettings() {
+    const savedLongBreak = localStorage.getItem(LS_LONG_BREAK_KEY);
+    const savedBreakHours = localStorage.getItem(LS_BREAK_HOURS_KEY);
+    const savedBreakMinutes = localStorage.getItem(LS_BREAK_MINUTES_KEY);
+
+    if (savedLongBreak && longBreakCheckbox) {
+        longBreakCheckbox.checked = (savedLongBreak === 'true');
+    }
+    if (savedBreakHours && breakHoursInput) {
+        breakHoursInput.value = savedBreakHours;
+    }
+    if (savedBreakMinutes && breakMinutesInput) {
+        breakMinutesInput.value = savedBreakMinutes;
+    }
+}
+
+function loadAutoRefreshSetting() {
+    const savedAutoRefresh = localStorage.getItem(LS_AUTO_REFRESH_KEY);
     if (savedAutoRefresh && autoRefreshCheckbox) {
         autoRefreshCheckbox.checked = (savedAutoRefresh === 'true');
         if (autoRefreshCheckbox.checked) {
-            // Delay initial auto-refresh calculation slightly to ensure UI is ready
             setTimeout(startAutoRefresh, 500);
         }
     }
+}
 
-    // Update break details visibility based on loaded checkbox state
-    if (longBreakCheckbox) { toggleBreakDetails(); }
-
-    // Apply saved theme preference if it exists
+function applyTheme() {
     if (localStorage.getItem('worktimeweb_darkMode') === 'true' && themeToggle) {
         themeToggle.checked = true;
         document.body.classList.add('dark-mode');
+    }
+}
+
+// --- Load Saved Values on Page Load ---
+function loadSavedValues() {
+    loadStartTime();
+    loadBreakSettings();
+    loadAutoRefreshSetting();
+    applyTheme();
+
+    if (longBreakCheckbox) {
+        toggleBreakDetails();
     }
 }
 
@@ -198,54 +217,79 @@ function setLoadingState(loading) {
     }
 }
 
-// --- Perform Calculation (AJAX) ---
-async function performCalculation() {
-    if (isCalculating) return; // Prevent concurrent calculations
-
-    hideError(); // Clear previous errors
-
-    // --- Client-Side Input Validation ---
+// --- Input Validation ---
+function validateInputs() {
     if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
         showError("Please enter a valid start time (HH:MM).");
         startTimeInput?.focus();
-        return;
+        return false;
     }
-
-    let breakHours = 0;
-    let breakMinutes = 0;
 
     if (longBreakCheckbox && longBreakCheckbox.checked) {
         if (!breakHoursInput || !breakMinutesInput) {
-             showError("Internal UI Error: Break input fields not found.");
-             return;
+            showError("Internal UI Error: Break input fields not found.");
+            return false;
         }
 
-        // Validate break hours
         const hoursValue = breakHoursInput.value.trim();
         if (hoursValue === '' || isNaN(hoursValue) || parseInt(hoursValue) < 0) {
             showError("Please enter a valid non-negative number for break hours.");
             breakHoursInput.focus();
-            return;
+            return false;
         }
-        breakHours = parseInt(hoursValue);
 
-        // Validate break minutes
         const minutesValue = breakMinutesInput.value.trim();
         if (minutesValue === '' || isNaN(minutesValue) || parseInt(minutesValue) < 0 || parseInt(minutesValue) > 59) {
             showError("Please enter a valid number between 0 and 59 for break minutes.");
             breakMinutesInput.focus();
-            return;
+            return false;
         }
-        breakMinutes = parseInt(minutesValue);
     }
-    // --- End Validation ---
+    return true;
+}
 
-    setLoadingState(true); // Set loading state AFTER validation
+// --- Response Handling ---
+async function handleResponse(response) {
+    if (!response.ok) {
+        let errorMsg = `Server Error: ${response.status} ${response.statusText}`;
+        const contentType = response.headers.get('content-type');
+
+        if (contentType && contentType.includes('application/json')) {
+            try {
+                const errorResult = await response.json();
+                errorMsg = errorResult.error || errorMsg;
+            } catch (parseError) {
+                console.error('Failed to parse JSON error response:', parseError);
+            }
+        } else {
+            console.warn(`Received non-JSON error response (Content-Type: ${contentType})`);
+        }
+        showError(errorMsg);
+    } else {
+        const result = await response.json();
+        updateResults(result);
+        saveCurrentValues();
+    }
+}
+
+// --- Perform Calculation (AJAX) ---
+async function performCalculation() {
+    if (isCalculating) return;
+
+    hideError();
+
+    if (!validateInputs()) {
+        return;
+    }
+
+    setLoadingState(true);
+
+    const breakHours = (longBreakCheckbox && longBreakCheckbox.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
+    const breakMinutes = (longBreakCheckbox && longBreakCheckbox.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
 
     const dataToSend = {
         start_time: startTimeInput.value,
         long_break: longBreakCheckbox ? longBreakCheckbox.checked : false,
-        // Send validated numbers as strings (backend expects strings)
         break_hours: String(breakHours),
         break_minutes: String(breakMinutes),
     };
@@ -255,46 +299,15 @@ async function performCalculation() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json', // Indicate we expect JSON back
+                'Accept': 'application/json',
             },
             body: JSON.stringify(dataToSend),
         });
-
-        // --- Improved Error Handling ---
-        if (!response.ok) {
-            let errorMsg = `Server Error: ${response.status} ${response.statusText}`; // Default message
-            const contentType = response.headers.get('content-type');
-
-            // Try to parse JSON error only if content type is correct
-            if (contentType && contentType.includes('application/json')) {
-                try {
-                    const errorResult = await response.json();
-                    // Use server error if available, otherwise keep default
-                    errorMsg = errorResult.error || errorMsg;
-                } catch (parseError) {
-                    console.error('Failed to parse JSON error response:', parseError);
-                    // Keep the default message if JSON parsing fails
-                }
-            } else {
-                // Handle non-JSON error responses (e.g., HTML error pages)
-                console.warn(`Received non-JSON error response (Content-Type: ${contentType})`);
-                // Could potentially try response.text() here if needed
-            }
-            showError(errorMsg); // Show the determined error message
-        } else {
-            // Success: Parse JSON, update UI, and save values
-            const result = await response.json();
-            updateResults(result);
-            saveCurrentValues(); // Save only on successful calculation
-        }
-        // --- End Improved Error Handling ---
-
+        await handleResponse(response);
     } catch (networkError) {
-        // Handle network errors (e.g., server down, CORS issues, DNS errors)
         console.error('Network or Fetch Error:', networkError);
         showError("Network Error: Could not connect to the server. Please check your connection.");
     } finally {
-        // Always turn off loading state, regardless of success or failure
         setLoadingState(false);
     }
 }
