@@ -242,19 +242,7 @@ function validateBreakInputs() {
     return true;
 }
 
-function validateInputs() {
-    if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
-        showError("Please enter a valid start time (HH:MM).");
-        startTimeInput?.focus();
-        return false;
-    }
 
-    if (longBreakCheckbox && longBreakCheckbox.checked) {
-        return validateBreakInputs();
-    }
-
-    return true;
-}
 
 // --- Response Handling ---
 async function handleResponse(response) {
@@ -286,8 +274,16 @@ async function performCalculation() {
 
     hideError();
 
-    if (!validateInputs()) {
+    if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
+        showError("Please enter a valid start time (HH:MM).");
+        startTimeInput?.focus();
         return;
+    }
+
+    if (longBreakCheckbox && longBreakCheckbox.checked) {
+        if (!validateBreakInputs()) {
+            return;
+        }
     }
 
     setLoadingState(true);
