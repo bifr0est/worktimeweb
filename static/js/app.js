@@ -279,6 +279,15 @@ function prepareDataToSend() {
     };
 }
 
+function handleBreakValidation() {
+    if (longBreakCheckbox?.checked) {
+        if (!validateBreakInputs()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 async function performCalculation() {
     if (isCalculating) return;
 
@@ -290,32 +299,15 @@ async function performCalculation() {
         return;
     }
 
-    if (longBreakCheckbox?.checked) {
-        if (!validateBreakInputs()) {
-            return;
-        }
+    if (!handleBreakValidation()) {
+        return;
     }
 
     setLoadingState(true);
 
     const dataToSend = prepareDataToSend();
 
-    try {
-        const response = await fetch('/calculate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(dataToSend),
-        });
-        await handleResponse(response);
-    } catch (networkError) {
-        console.error('Network or Fetch Error:', networkError);
-        showError("Network Error: Could not connect to the server. Please check your connection.");
-    } finally {
-        setLoadingState(false);
-    }
+    await fetchData(dataToSend);
 }
 
 // --- Event Listeners ---
@@ -349,10 +341,14 @@ if (breakMinutesInput) {
 }
 
 // --- Auto-Refresh Logic ---
+function isStartTimeValid() {
+    return startTimeInput?.value && startTimeInput?.checkValidity();
+}
+
 function startAutoRefresh() {
     if (refreshInterval === null) { // Start only if not already running
         // Perform an initial calculation immediately *only if* start time is valid
-        if (startTimeInput?.value && startTimeInput?.checkValidity()) {
+        if (isStartTimeValid()) {
             performCalculation();
         }
         // Set interval to call performCalculation every 60 seconds
