@@ -137,7 +137,7 @@ function toggleBreakDetails() {
             breakDetailsDiv.style.marginTop = '0';
             // Delay removing padding/border until after collapse transition
             setTimeout(() => {
-                if (!longBreakCheckbox || !longBreakCheckbox.checked) {
+                if (!longBreakCheckbox?.checked) {
                     breakDetailsDiv.style.padding = '0 1rem';
                     breakDetailsDiv.style.border = 'none';
                 }
@@ -288,14 +288,27 @@ function handleBreakValidation() {
     return true;
 }
 
-async function performCalculation() {
-    if (isCalculating) return;
-
-    hideError();
-
-    if (!startTimeInput || !startTimeInput.value || !startTimeInput.checkValidity()) {
+function validateStartTime() {
+    if (!startTimeInput?.value || !startTimeInput?.checkValidity()) {
         showError("Please enter a valid start time (HH:MM).");
         startTimeInput?.focus();
+        return false;
+    }
+    return true;
+}
+
+function preCalculationChecks() {
+    if (isCalculating) return false;
+    hideError();
+    return true;
+}
+
+async function performCalculation() {
+    if (!preCalculationChecks()) {
+        return;
+    }
+
+    if (!validateStartTime()) {
         return;
     }
 
