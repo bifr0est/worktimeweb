@@ -58,13 +58,13 @@ function loadBreakSettings() {
     const savedBreakHours = localStorage.getItem(LS_BREAK_HOURS_KEY);
     const savedBreakMinutes = localStorage.getItem(LS_BREAK_MINUTES_KEY);
 
-    if (savedLongBreak && longBreakCheckbox) {
+    if (savedLongBreak) {
         longBreakCheckbox.checked = (savedLongBreak === 'true');
     }
-    if (savedBreakHours && breakHoursInput) {
+    if (savedBreakHours) {
         breakHoursInput.value = savedBreakHours;
     }
-    if (savedBreakMinutes && breakMinutesInput) {
+    if (savedBreakMinutes) {
         breakMinutesInput.value = savedBreakMinutes;
     }
 }
@@ -93,9 +93,7 @@ function loadSavedValues() {
     loadAutoRefreshSetting();
     applyTheme();
 
-    if (longBreakCheckbox) {
-        toggleBreakDetails();
-    }
+    longBreakCheckbox?.toggleBreakDetails();
 }
 
 // --- Save Values to Local Storage ---
@@ -127,7 +125,7 @@ if (themeToggle) { themeToggle.addEventListener('change', applyThemeChange); }
 function toggleBreakDetails() {
     if (!breakDetailsDiv) return;
     requestAnimationFrame(() => { // Use requestAnimationFrame for smoother transitions
-        if (longBreakCheckbox && longBreakCheckbox.checked) {
+        if (longBreakCheckbox?.checked) {
             breakDetailsDiv.style.maxHeight = breakDetailsDiv.scrollHeight + "px";
             breakDetailsDiv.style.opacity = '1';
             breakDetailsDiv.style.marginTop = '1rem';
@@ -280,7 +278,7 @@ async function performCalculation() {
         return;
     }
 
-    if (longBreakCheckbox && longBreakCheckbox.checked) {
+    if (longBreakCheckbox?.checked) {
         if (!validateBreakInputs()) {
             return;
         }
@@ -318,10 +316,10 @@ async function performCalculation() {
 
 // --- Event Listeners ---
 if (calculateButton) {
-    calculateButton.addEventListener('click', performCalculation);
+    calculateButton?.addEventListener('click', performCalculation);
 }
 if (startTimeInput) {
-    startTimeInput.addEventListener('keypress', function(event) {
+    startTimeInput?.addEventListener('keypress', function(event) {
         if (event.key === 'Enter') {
             event.preventDefault(); // Prevent default form submission if any
             performCalculation();
@@ -330,7 +328,7 @@ if (startTimeInput) {
 }
 // Add Enter key listener to break inputs too, if they are visible
 if (breakHoursInput) {
-     breakHoursInput.addEventListener('keypress', function(event) {
+     breakHoursInput?.addEventListener('keypress', function(event) {
          if (event.key === 'Enter') {
              event.preventDefault();
              performCalculation();
@@ -338,7 +336,7 @@ if (breakHoursInput) {
      });
 }
 if (breakMinutesInput) {
-     breakMinutesInput.addEventListener('keypress', function(event) {
+     breakMinutesInput?.addEventListener('keypress', function(event) {
          if (event.key === 'Enter') {
              event.preventDefault();
              performCalculation();
@@ -350,7 +348,7 @@ if (breakMinutesInput) {
 function startAutoRefresh() {
     if (refreshInterval === null) { // Start only if not already running
         // Perform an initial calculation immediately *only if* start time is valid
-        if (startTimeInput && startTimeInput.value && startTimeInput.checkValidity()) {
+        if (startTimeInput?.value && startTimeInput?.checkValidity()) {
             performCalculation();
         }
         // Set interval to call performCalculation every 60 seconds
@@ -368,7 +366,7 @@ function stopAutoRefresh() {
 
 // Add event listener for the auto-refresh checkbox
 if (autoRefreshCheckbox) {
-    autoRefreshCheckbox.addEventListener('change', function() {
+    autoRefreshCheckbox?.addEventListener('change', function() {
         localStorage.setItem(LS_AUTO_REFRESH_KEY, autoRefreshCheckbox.checked); // Save state immediately
         if (autoRefreshCheckbox.checked) {
             startAutoRefresh();
