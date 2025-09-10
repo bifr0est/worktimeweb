@@ -1,4 +1,4 @@
-// worktimeweb/static/js/app.js
+// worktimeweb/static/js/app.js - Version 1.1 with fetchData function
 
 // --- Local Storage Keys ---
 const LS_START_TIME_KEY = 'worktimeweb_startTime';
@@ -93,7 +93,7 @@ function loadSavedValues() {
     loadAutoRefreshSetting();
     applyTheme();
 
-    longBreakCheckbox?.toggleBreakDetails();
+    toggleBreakDetails();
 }
 
 // --- Save Values to Local Storage ---
@@ -327,6 +327,25 @@ async function performCalculation() {
     const dataToSend = prepareDataToSend();
 
     await fetchData(dataToSend);
+}
+
+async function fetchData(dataToSend) {
+    try {
+        const response = await fetch('/calculate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dataToSend)
+        });
+
+        await handleResponse(response);
+    } catch (error) {
+        console.error('Network error:', error);
+        showError('Network error: Unable to connect to server. Please check your connection.');
+    } finally {
+        setLoadingState(false);
+    }
 }
 
 // --- Event Listeners ---

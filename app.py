@@ -105,11 +105,11 @@ def determine_work_duration(start_datetime_local):
     if day_of_week < FRIDAY:  # Mon-Thu
         base_work_duration = WORK_DURATION_REGULAR_NO_BREAK
         required_total_duration = base_work_duration + STANDARD_BREAK
-        day_type = f"Regular ({required_total_duration.total_seconds() / SECONDS_PER_HOUR:.2f}h)"
+        day_type = f"Regular ({base_work_duration.total_seconds() / SECONDS_PER_HOUR:.0f}h work)"
     elif day_of_week == FRIDAY:  # Fri
         base_work_duration = WORK_DURATION_FRIDAY_NO_BREAK
         required_total_duration = base_work_duration + STANDARD_BREAK
-        day_type = f"Friday ({required_total_duration.total_seconds() / SECONDS_PER_HOUR:.2f}h)"
+        day_type = f"Friday ({base_work_duration.total_seconds() / SECONDS_PER_HOUR:.1f}h work)"
     else:  # Weekend
         raise CalculationError("Work time calculations are not available for weekends.")
     
@@ -160,43 +160,56 @@ def calculate_status(now_local, end_datetime_local, extra_break_time):
         return status
 
 def perform_time_calculations(start_time_str, long_break_checked, break_hours_str, break_minutes_str):
-    """Performs the core time tracking calculations."""
+    """Performs the core time tracking calculations - matches JavaScript logic exactly."""
     # Parse and validate start time
     start_datetime_local, now_local = parse_start_time(start_time_str)
     
-    # Determine work duration based on day of week
+    # Determine required work duration based on day of week
     base_work_duration, required_total_duration, day_type = determine_work_duration(start_datetime_local)
     
     # Calculate break duration
     entered_break_duration, extra_break_time = calculate_break_duration(
         long_break_checked, break_hours_str, break_minutes_str)
     
-    # Calculate end time
+    # Calculate total elapsed time since start
+    total_elapsed_time = now_local - start_datetime_local
+    if total_elapsed_time.total_seconds() < 0:
+        total_elapsed_time = timedelta(0)
+    total_elapsed_seconds = int(total_elapsed_time.total_seconds())
+    
+    # Calculate actual work time = total elapsed time - break time
+    # This assumes you've taken all your break time already
+    break_seconds_total = int(entered_break_duration.total_seconds())
+    actual_work_seconds = max(0, total_elapsed_seconds - break_seconds_total)
+    worked_str = format_time_duration(actual_work_seconds)
+    
+    # Calculate leave time: start + required work duration + break duration
     end_datetime_local = start_datetime_local + base_work_duration + entered_break_duration
     
-    # Calculate elapsed time
-    elapsed_time = now_local - start_datetime_local
-    if elapsed_time.total_seconds() < 0:
-        elapsed_time = timedelta(0)
-    elapsed_total_seconds = int(elapsed_time.total_seconds())
-    worked_str = format_time_duration(elapsed_total_seconds)
+    # Calculate remaining work time needed
+    required_work_seconds = int(base_work_duration.total_seconds())
+    remaining_work_seconds = max(0, required_work_seconds - actual_work_seconds)
     
-    # Calculate required seconds including extra break time
-    required_seconds = int(required_total_duration.total_seconds())
-    if extra_break_time > timedelta(0):
-        required_seconds += int(extra_break_time.total_seconds())
-    
-    # Calculate status
-    status = calculate_status(now_local, end_datetime_local, extra_break_time)
+    # Calculate status based on remaining work time
+    if remaining_work_seconds > 0:
+        remaining_str = format_time_duration(remaining_work_seconds)
+        status = f"Remaining: {remaining_str}"
+    else:
+        # Calculate overtime
+        overtime_seconds = actual_work_seconds - required_work_seconds
+        overtime_str = format_time_duration(overtime_seconds)
+        status = f"Overtime: {overtime_str}"
+        if extra_break_time > timedelta(0):
+            status += f" (incl. {int(extra_break_time.total_seconds() / SECONDS_PER_MINUTE)} min extra break)"
     
     return {
         'end_time': end_datetime_local.strftime('%H:%M'),
         'day_type': day_type,
         'worked': worked_str,
         'status': status,
-        'elapsed_seconds': elapsed_total_seconds,
-        'required_seconds': required_seconds,
-        'break_seconds': int(entered_break_duration.total_seconds()),
+        'elapsed_seconds': actual_work_seconds,      # Actual work time for progress bar
+        'required_seconds': required_work_seconds,   # Required work time (no breaks)
+        'break_seconds': break_seconds_total,
         'timezone': LOCAL_TZ.zone
     }
 
@@ -249,7 +262,12 @@ def add_headers(response):
     """Adds security headers and Service-Worker-Allowed header."""
 
     # Add security headers
-    response.headers['Cache-Control'] = 'public, max-age=3600' # Allow caching for 1 hour
+    if request.path.endswith('.js') or request.path.endswith('.css'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    else:
+        response.headers['Cache-Control'] = 'public, max-age=3600' # Allow caching for 1 hour
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers.pop('Server', None) # Remove default Server header
