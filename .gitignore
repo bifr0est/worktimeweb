@@ -41,6 +41,3 @@ Thumbs.db
 # Flask specific
 instance/
 .flaskenv
-
-# SonarQube scanner work directory
-.scannerwork/
