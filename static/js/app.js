@@ -194,7 +194,7 @@ function formatDisplayTime(time24) {
     }
 
     const [hourPart, minutePart] = time24.split(':');
-    const hour = parseInt(hourPart, 10);
+    const hour = Number.parseInt(hourPart, 10);
     if (Number.isNaN(hour) || minutePart === undefined) {
         return time24;
     }
@@ -233,9 +233,10 @@ function updateResults(data) {
             let progress = Math.max(0, (data.elapsed_seconds / data.required_seconds) * 100);
             progressPercent = Math.round(progress);
         }
-        progressBarInner.style.width = progressPercent + '%';
+        progressBarInner.value = progressPercent;
         progressBarInner.textContent = progressPercent + '%';
-        progressBarInner.setAttribute('aria-valuenow', progressPercent);
+        const progressText = document.getElementById('progress-text');
+        if (progressText) progressText.textContent = progressPercent + '%';
         progressBarContainer.classList.remove('d-none');
     } else if (progressBarContainer) {
         progressBarContainer.classList.add('d-none');
@@ -252,7 +253,7 @@ function updateNotificationHelp(message) {
         return;
     }
 
-    if (!('Notification' in window)) {
+    if (!('Notification' in globalThis)) {
         notificationHelp.textContent = 'This browser does not support notifications.';
     } else if (Notification.permission === 'denied') {
         notificationHelp.textContent = 'Notifications are blocked in your browser settings.';
@@ -262,7 +263,7 @@ function updateNotificationHelp(message) {
 }
 
 async function requestNotificationPermission() {
-    if (!('Notification' in window)) {
+    if (!('Notification' in globalThis)) {
         updateNotificationHelp('This browser does not support notifications.');
         return false;
     }
@@ -302,7 +303,7 @@ function rememberNotification(notificationId) {
 }
 
 function showEndNotification(endTime, notificationId) {
-    if (!notifyEndCheckbox?.checked || !('Notification' in window) || Notification.permission !== 'granted') {
+    if (!notifyEndCheckbox?.checked || !('Notification' in globalThis) || Notification.permission !== 'granted') {
         return;
     }
     if (hasNotificationAlreadyShown(notificationId)) {
@@ -316,7 +317,7 @@ function showEndNotification(endTime, notificationId) {
             tag: notificationId,
             renotify: false
         });
-        notification.onclick = () => window.focus();
+        notification.onclick = () => globalThis.focus();
         rememberNotification(notificationId);
     } catch (error) {
         console.error('Could not show end-of-day notification:', error);
@@ -386,13 +387,13 @@ function validateBreakInputs() {
     const hoursValue = breakHoursInput.value.trim();
     const minutesValue = breakMinutesInput.value.trim();
 
-    if (hoursValue === '' || isNaN(hoursValue) || parseInt(hoursValue) < 0) {
+    if (hoursValue === '' || isNaN(hoursValue) || Number.parseInt(hoursValue) < 0) {
         showError("Please enter a valid non-negative number for break hours.");
         breakHoursInput.focus();
         return false;
     }
 
-    if (minutesValue === '' || isNaN(minutesValue) || parseInt(minutesValue) < 0 || parseInt(minutesValue) > 59) {
+    if (minutesValue === '' || isNaN(minutesValue) || Number.parseInt(minutesValue) < 0 || Number.parseInt(minutesValue) > 59) {
         showError("Please enter a valid number between 0 and 59 for break minutes.");
         breakMinutesInput.focus();
         return false;
@@ -429,8 +430,8 @@ async function handleResponse(response) {
 
 // --- Perform Calculation (AJAX) ---
 function prepareDataToSend() {
-    const breakHours = (longBreakCheckbox?.checked && breakHoursInput) ? parseInt(breakHoursInput.value.trim()) : 0;
-    const breakMinutes = (longBreakCheckbox?.checked && breakMinutesInput) ? parseInt(breakMinutesInput.value.trim()) : 0;
+    const breakHours = (longBreakCheckbox?.checked && breakHoursInput) ? Number.parseInt(breakHoursInput.value.trim()) : 0;
+    const breakMinutes = (longBreakCheckbox?.checked && breakMinutesInput) ? Number.parseInt(breakMinutesInput.value.trim()) : 0;
 
     return {
         start_time: startTimeInput.value,

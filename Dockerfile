@@ -11,11 +11,18 @@ ENV TIMEZONE=Europe/Vienna
 WORKDIR /app
 
 # Install Python dependencies using uv and keep the cached layer stable.
-COPY pyproject.toml uv.lock* ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Copy the rest of the application code into the container
 COPY . .
+
+# Create a non-root user and set permissions
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
 
 # Expose the port the app runs on (should match Gunicorn command)
 EXPOSE 5000

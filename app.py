@@ -165,7 +165,7 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
     start_datetime_local, now_local = parse_start_time(start_time_str)
     
     # Determine required work duration based on day of week
-    base_work_duration, required_total_duration, day_type = determine_work_duration(start_datetime_local)
+    base_work_duration, _, day_type = determine_work_duration(start_datetime_local)
     
     # Calculate break duration
     entered_break_duration, extra_break_time = calculate_break_duration(
@@ -263,7 +263,7 @@ def add_headers(response):
     """Adds security headers and Service-Worker-Allowed header."""
 
     # Add security headers
-    if request.path.endswith('.js') or request.path.endswith('.css'):
+    if request.path.endswith(('.js', '.css')):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
