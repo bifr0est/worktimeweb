@@ -7,6 +7,9 @@ const LS_LONG_BREAK_KEY = 'worktimeweb_longBreakChecked';
 const LS_BREAK_HOURS_KEY = 'worktimeweb_breakHours';
 const LS_BREAK_MINUTES_KEY = 'worktimeweb_breakMinutes';
 const LS_AUTO_REFRESH_KEY = 'worktimeweb_autoRefreshChecked';
+const LS_AMPM_DISPLAY_KEY = 'worktimeweb_ampmDisplayChecked';
+const LS_NOTIFY_END_KEY = 'worktimeweb_notifyEndChecked';
+const LS_LAST_NOTIFICATION_KEY = 'worktimeweb_lastNotificationId';
 
 // --- Element References ---
 const calculateButton = document.getElementById('calculate-button');
@@ -16,6 +19,9 @@ const breakDetailsDiv = document.getElementById('break-details');
 const breakHoursInput = document.getElementById('break_hours');
 const breakMinutesInput = document.getElementById('break_minutes');
 const autoRefreshCheckbox = document.getElementById('auto_refresh');
+const ampmDisplayCheckbox = document.getElementById('ampm_display');
+const notifyEndCheckbox = document.getElementById('notify_end');
+const notificationHelp = document.getElementById('notification-help');
 const errorDisplay = document.getElementById('error-display');
 const errorMessage = document.getElementById('error-message');
 const resultsDisplay = document.getElementById('results-display');
@@ -30,6 +36,8 @@ const themeToggle = document.getElementById('theme-checkbox');
 
 let refreshInterval = null;
 let isCalculating = false;
+let notificationTimeout = null;
+let latestResult = null;
 
 // --- Helper Function to get current date as YYYY-MM-DD ---
 function getCurrentDateString() {
@@ -79,6 +87,21 @@ function loadAutoRefreshSetting() {
     }
 }
 
+function loadDisplaySettings() {
+    const savedAmpmDisplay = localStorage.getItem(LS_AMPM_DISPLAY_KEY);
+    if (savedAmpmDisplay && ampmDisplayCheckbox) {
+        ampmDisplayCheckbox.checked = savedAmpmDisplay === 'true';
+    }
+}
+
+function loadNotificationSetting() {
+    const savedNotifyEnd = localStorage.getItem(LS_NOTIFY_END_KEY);
+    if (savedNotifyEnd && notifyEndCheckbox) {
+        notifyEndCheckbox.checked = savedNotifyEnd === 'true';
+    }
+    updateNotificationHelp();
+}
+
 function applyTheme() {
     if (localStorage.getItem('worktimeweb_darkMode') === 'true' && themeToggle) {
         themeToggle.checked = true;
@@ -90,6 +113,8 @@ function applyTheme() {
 function loadSavedValues() {
     loadStartTime();
     loadBreakSettings();
+    loadDisplaySettings();
+    loadNotificationSetting();
     loadAutoRefreshSetting();
     applyTheme();
 
@@ -129,12 +154,14 @@ function toggleBreakDetails() {
             breakDetailsDiv.style.maxHeight = breakDetailsDiv.scrollHeight + "px";
             breakDetailsDiv.style.opacity = '1';
             breakDetailsDiv.style.marginTop = '1rem';
+            breakDetailsDiv.style.marginBottom = '1rem';
             breakDetailsDiv.style.padding = '1rem';
             breakDetailsDiv.style.border = '1px solid var(--border-color)';
         } else {
             breakDetailsDiv.style.maxHeight = '0';
             breakDetailsDiv.style.opacity = '0';
             breakDetailsDiv.style.marginTop = '0';
+            breakDetailsDiv.style.marginBottom = '0';
             // Delay removing padding/border until after collapse transition
             setTimeout(() => {
                 if (!longBreakCheckbox?.checked) {
@@ -161,6 +188,28 @@ function hideError() {
     if (errorDisplay) errorDisplay.classList.add('d-none');
 }
 
+function formatDisplayTime(time24) {
+    if (!ampmDisplayCheckbox?.checked || !time24) {
+        return time24;
+    }
+
+    const [hourPart, minutePart] = time24.split(':');
+    const hour = parseInt(hourPart, 10);
+    if (Number.isNaN(hour) || minutePart === undefined) {
+        return time24;
+    }
+
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutePart} ${period}`;
+}
+
+function updateDisplayedEndTime() {
+    if (latestResult && resultEndTime) {
+        resultEndTime.textContent = formatDisplayTime(latestResult.end_time);
+    }
+}
+
 // --- Update Results Display ---
 function updateResults(data) {
     if (!resultEndTime || !resultDayType || !resultWorked || !resultStatus || !resultTimezone || !resultsDisplay) {
@@ -168,7 +217,8 @@ function updateResults(data) {
         showError("Internal UI error: Could not display results."); // Show user-friendly error
         return;
     }
-    resultEndTime.textContent = data.end_time;
+    latestResult = data;
+    resultEndTime.textContent = formatDisplayTime(data.end_time);
     resultDayType.textContent = `(${data.day_type})`;
     resultWorked.textContent = data.worked;
     resultStatus.textContent = data.status;
@@ -191,6 +241,117 @@ function updateResults(data) {
         progressBarContainer.classList.add('d-none');
     }
     resultsDisplay.classList.remove('d-none'); // Show results area
+    scheduleEndNotification(data);
+}
+
+function updateNotificationHelp(message) {
+    if (!notificationHelp) return;
+
+    if (message) {
+        notificationHelp.textContent = message;
+        return;
+    }
+
+    if (!('Notification' in window)) {
+        notificationHelp.textContent = 'This browser does not support notifications.';
+    } else if (Notification.permission === 'denied') {
+        notificationHelp.textContent = 'Notifications are blocked in your browser settings.';
+    } else {
+        notificationHelp.textContent = 'Requires browser notification permission and this page to stay open.';
+    }
+}
+
+async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+        updateNotificationHelp('This browser does not support notifications.');
+        return false;
+    }
+
+    if (Notification.permission === 'granted') {
+        updateNotificationHelp();
+        return true;
+    }
+
+    if (Notification.permission === 'denied') {
+        updateNotificationHelp('Notifications are blocked in your browser settings.');
+        return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    updateNotificationHelp();
+    return permission === 'granted';
+}
+
+function clearEndNotification() {
+    if (notificationTimeout !== null) {
+        clearTimeout(notificationTimeout);
+        notificationTimeout = null;
+    }
+}
+
+function buildNotificationId(endTime) {
+    return `${getCurrentDateString()}-${startTimeInput?.value || ''}-${endTime}`;
+}
+
+function hasNotificationAlreadyShown(notificationId) {
+    return localStorage.getItem(LS_LAST_NOTIFICATION_KEY) === notificationId;
+}
+
+function rememberNotification(notificationId) {
+    localStorage.setItem(LS_LAST_NOTIFICATION_KEY, notificationId);
+}
+
+function showEndNotification(endTime, notificationId) {
+    if (!notifyEndCheckbox?.checked || !('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+    }
+    if (hasNotificationAlreadyShown(notificationId)) {
+        return;
+    }
+
+    try {
+        const notification = new Notification('Workday complete', {
+            body: `You can leave now. Planned end time: ${formatDisplayTime(endTime)}.`,
+            icon: '/static/icons/icon-192x192.png',
+            tag: notificationId,
+            renotify: false
+        });
+        notification.onclick = () => window.focus();
+        rememberNotification(notificationId);
+    } catch (error) {
+        console.error('Could not show end-of-day notification:', error);
+        updateNotificationHelp('Could not show notification. Check browser permissions and secure connection settings.');
+    }
+}
+
+function scheduleEndNotification(data) {
+    clearEndNotification();
+
+    if (!notifyEndCheckbox?.checked || !data?.end_timestamp) {
+        return;
+    }
+
+    const notificationId = buildNotificationId(data.end_time);
+    if (hasNotificationAlreadyShown(notificationId)) {
+        return;
+    }
+
+    const endTime = new Date(data.end_timestamp).getTime();
+    if (Number.isNaN(endTime)) {
+        updateNotificationHelp('Could not schedule notification for this end time.');
+        return;
+    }
+
+    const delay = endTime - Date.now();
+    if (delay <= 0) {
+        showEndNotification(data.end_time, notificationId);
+        return;
+    }
+
+    notificationTimeout = setTimeout(() => {
+        showEndNotification(data.end_time, notificationId);
+        notificationTimeout = null;
+    }, delay);
 }
 
 // --- Set Loading State ---
@@ -410,6 +571,37 @@ if (autoRefreshCheckbox) {
             startAutoRefresh();
         } else {
             stopAutoRefresh();
+        }
+    });
+}
+
+if (ampmDisplayCheckbox) {
+    ampmDisplayCheckbox.addEventListener('change', function() {
+        localStorage.setItem(LS_AMPM_DISPLAY_KEY, ampmDisplayCheckbox.checked);
+        updateDisplayedEndTime();
+    });
+}
+
+if (notifyEndCheckbox) {
+    notifyEndCheckbox.addEventListener('change', async function() {
+        localStorage.setItem(LS_NOTIFY_END_KEY, notifyEndCheckbox.checked);
+
+        if (!notifyEndCheckbox.checked) {
+            clearEndNotification();
+            updateNotificationHelp();
+            return;
+        }
+
+        const permissionGranted = await requestNotificationPermission();
+        if (!permissionGranted) {
+            notifyEndCheckbox.checked = false;
+            localStorage.setItem(LS_NOTIFY_END_KEY, false);
+            clearEndNotification();
+            return;
+        }
+
+        if (latestResult) {
+            scheduleEndNotification(latestResult);
         }
     });
 }

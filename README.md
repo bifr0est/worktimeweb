@@ -13,6 +13,8 @@ A simple yet powerful web application built with Flask to calculate your work en
 * **Real-time Status:** Shows remaining work time or overtime accrued.
 * **AJAX Updates:** Calculates and updates results instantly without full page reloads.
 * **Auto-Refresh:** Optional auto-refresh (every 60 seconds) to update status.
+* **AM/PM Display:** Optional switch to show calculated leave times in 12-hour format.
+* **End-of-Day Notifications:** Optional browser notification when the calculated workday ends while the page remains open.
 * **Timezone Aware:** Uses `pytz` for accurate timezone handling (configurable via environment variable).
 * **Work Progress Bar:** Visual indicator of how much of the required work time has been completed.
 * **Dark/Light Mode:** User-toggleable theme for comfort.
@@ -36,7 +38,7 @@ A simple yet powerful web application built with Flask to calculate your work en
     git clone [https://github.com/bifr0est/worktimeweb.git](https://github.com/bifr0est/worktimeweb.git)
     cd worktimeweb
     ```
-2.  **Environment Variables:** The application uses environment variables for configuration. You can set these directly in your system or use a `.env` file with `python-dotenv` for local development (add `python-dotenv` to `requirements.txt` if using `.env`).
+2.  **Environment Variables:** The application uses environment variables for configuration. You can set these directly in your system or use a `.env` file with `python-dotenv` for local development.
 
     * `FLASK_SECRET_KEY`: **Required** for Flask sessions/security. Generate a strong random key.
     * `TIMEZONE`: **Optional** (defaults to `Europe/Vienna`). Olson timezone name (e.g., `America/New_York`).
@@ -49,27 +51,22 @@ A simple yet powerful web application built with Flask to calculate your work en
 
 ## 🚀 Running Locally (Development)
 
-1.  **Create & Activate Virtual Environment:**
+1.  **Install Dependencies:**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    uv sync
     ```
-2.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  **Set Environment Variables:** (Example for Linux/macOS)
+2.  **Set Environment Variables:** (Example for Linux/macOS)
     ```bash
     export FLASK_APP=app:app
     export FLASK_DEBUG=1 # Enable debug mode for development ONLY
     export FLASK_SECRET_KEY='a_very_strong_random_secret_key_local'
     # Optional: export TIMEZONE='Your/Timezone'
     ```
-4.  **Run the Flask Development Server:**
+3.  **Run the Flask Development Server:**
     ```bash
-    flask run
+    uv run flask run
     ```
-5.  Access the app at `http://127.0.0.1:5000`.
+4.  Access the app at `http://127.0.0.1:5000`.
 
 ## 🐳 Running with Docker
 
@@ -108,6 +105,7 @@ You can configure your server (e.g., Unraid Docker) to pull and run this image.
 * [ ] Enhance PWA features:
     * [ ] Offline calculation functionality (requires JS rewrite of logic or more advanced service worker caching).
     * [ ] Add `screenshots` to `manifest.json` for richer install UI.
+    * [ ] Background notifications when the app is fully closed.
 * [ ] Add automated tests (unit/integration).
 * [ ] More comprehensive server-side logging.
 

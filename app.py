@@ -204,6 +204,7 @@ def perform_time_calculations(start_time_str, long_break_checked, break_hours_st
     
     return {
         'end_time': end_datetime_local.strftime('%H:%M'),
+        'end_timestamp': end_datetime_local.isoformat(),
         'day_type': day_type,
         'worked': worked_str,
         'status': status,

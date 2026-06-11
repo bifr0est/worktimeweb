@@ -7,7 +7,8 @@ on:
     # Only run workflow if changes occur in these paths/files
     paths:
       - 'app.py'
-      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'uv.lock'
       - 'Dockerfile'
       - 'static/**'
       - 'templates/**'

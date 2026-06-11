@@ -1,6 +1,6 @@
 // worktimeweb/static/service-worker.js
 
-const CACHE_NAME = 'worktimeweb-shell-v1'; // Change version to force update
+const CACHE_NAME = 'worktimeweb-shell-v3'; // Change version to force update
 const urlsToCache = [
   '/', // The main HTML page
   '/static/css/style.css',
